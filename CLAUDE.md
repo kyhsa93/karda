@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-브라우저 3D 전쟁 게임. 기존 AH-64 아파치 조종 콘텐츠(캠페인·훈련·즉시 출격)는 2026-09-30 제거했고, 봇과 함께 혼자 하는 배틀필드식 **"전장"** 모드로 다시 만드는 중이다. 게임 이름은 **카르다 전선**(2026-10-03 결정 O1, "아파치"는 탈것 이름으로만). 새 기획은 저장소 위키(https://github.com/kyhsa93/karda/wiki), 방향의 기준은 위키 [비전과 방향]·[소유자 결정]. 세부 기획은 `.claude/agents/game-designer.md`, 방향·우선순위는 디렉터 에이전트 넷(`game-director`·`creative-director`·`art-director`·`technical-director`).
+브라우저 3D 전쟁 게임. 기존 AH-64 아파치 조종 콘텐츠(캠페인·훈련·즉시 출격)는 2026-09-30 제거했고, 봇과 함께 혼자 하는 배틀필드식 **"전장"** 모드로 다시 만드는 중이다. 게임 이름은 **카르다 전선**(2026-10-03 결정 O1, "아파치"는 탈것 이름으로만). 새 기획은 저장소 위키(https://github.com/kyhsa93/karda/wiki), 방향의 기준은 위키 [비전과 방향]·[소유자 결정]. 세부 기획은 `.claude/agents/game-designer.md`, 방향·우선순위는 디렉터 에이전트 넷(`game-director`·`creative-director`·`art-director`·`technical-director`). 정의 원본은 비공개 `kyhsa93/agents`의 `teams/karda/`이고 여기는 배포 사본이다. 디렉터는 그룹 임원 아래에서 일한다(GD는 group-ceo, TD는 group-cto에 보고).
 
 ## 먼저 읽을 것
 
