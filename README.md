@@ -4,7 +4,7 @@ https://kyhsa93.github.io/karda/
 
 봇과 함께 싸우는 점령전. 연합군과 베로스 인민군(VPA)이 카르다 계곡의 거점을 놓고 싸우고, 플레이어는 진영을 골라 보병 또는 탈것으로 출격한다. 전선의 흐름은 봇이 만들지만, 어느 거점이 넘어가는지는 플레이어가 바꾼다. 브라우저에서 돌고(three.js), 서버 없이 혼자 한다.
 
-지금 되는 것: 빠른 점령전(거점 3곳), 보병 돌격병, 공격 헬기, 양 진영 선택, 티켓 리스폰. 조작은 출격 화면의 조작 카드에 있다(키보드·게임패드·터치). 앞으로의 계획은 [위키](https://github.com/kyhsa93/karda/wiki)의 [비전과 방향](https://github.com/kyhsa93/karda/wiki/비전과-방향)과 [로드맵](https://github.com/kyhsa93/karda/wiki/10-로드맵).
+지금 되는 것: 빠른 점령전(거점 3곳), 보병 돌격병, 공격 헬기(연합군만, VPA 헬기는 준비 중), 양 진영 선택, 티켓 리스폰. 조작은 출격 화면의 조작 카드에 있다(키보드·게임패드·터치). 앞으로의 계획은 [위키](https://github.com/kyhsa93/karda/wiki)의 [비전과 방향](https://github.com/kyhsa93/karda/wiki/비전과-방향)과 [로드맵](https://github.com/kyhsa93/karda/wiki/10-로드맵).
 
 ## 앱으로 설치 (PWA)
 
