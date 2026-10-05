@@ -24,5 +24,7 @@ npm run dev     # 개발 서버
 npm run check   # 타입체크 + 테스트 + 빌드
 ```
 
-- `src/sim3d/` — 비행 물리·임무(`sim.ts`), 지형 생성(`terrain.ts`), three.js 장면(`scene.ts`), 아파치 기체·조종석 모델(`heliModel.ts`), MPD·EUFD·예비 계기(`instruments.ts`), 헬멧 심볼(`ihadss.ts`), 로터 소리(`audio.ts`), 입력(`input.ts`)
-- `src/components/` — 3D 화면·브리핑·HUD·터치 스틱 React 컴포넌트
+- `src/sim/` — 게임 규칙(렌더·DOM·React 없음, 월드 RNG로 결정론): 월드(`world.ts`), 지형(`terrain.ts`), 헬기 비행·계통(`heli/`), 보병(`infantry/`), 점령전·봇 지휘(`battle/`), 무장(`weapons/`)·센서(`sensors/`)·봇 AI(`ai/`)
+- `src/render/` — three.js 장면(`scene.ts`)·렌더 루프(`renderer.ts`), 아파치 기체(`heliModel.ts`)·조종석과 MPD·EUFD·예비 계기(`cockpit/`), 헬멧 심볼(`ihadss.ts`), 깃발·병사·보병 뷰모델(`battle/`)
+- `src/ui/` — 화면(`screens/`)·출격 화면과 전장 HUD(`battle/`)·터치 스틱(`components/`) React 컴포넌트
+- `src/input/` 입력 바인딩(키보드·게임패드·터치), `src/audio/` 로터·효과음 합성, `src/content/` 수치·문자열 JSON과 전장 지도(`battle/`)
