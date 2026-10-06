@@ -18,6 +18,7 @@ const player = arg('player', 'idle') as 'idle' | 'proxy' | 'soldier';
 const stance = arg('stance', 'cover') as ProxyStance;
 const seeds = Number(arg('seeds', '20'));
 const first = Number(arg('seed', '1'));
+const aimError = Number(arg('aim-error', '0'));
 const trace = process.argv.includes('--trace');
 const json = process.argv.includes('--json');
 const overrides = process.argv.flatMap((a, i) => (a === '--set' ? [process.argv[i + 1]] : []));
@@ -50,6 +51,7 @@ function play(seed: number): Run {
   world.events.on('pointOwner', e => { flips[e.id]++; flipTimes.push(runtime.conquest.elapsed); if (e.from !== 'neutral' && starts[e.from] === e.id) fell.add(e.from); });
   world.events.on('unitDestroyed', () => { kills++; });
   const proxy = player === 'proxy' ? new ProxyPilot(runtime, side) : null;
+  if (proxy) proxy.aimErrorMrad = aimError;
   const soldier = player === 'soldier' ? new SoldierProxy(runtime, side, stance) : null;
   const t0 = performance.now();
   let steps = 0;
@@ -57,7 +59,7 @@ function play(seed: number): Run {
   let last: { x: number; z: number } | null = null;
   const limit = (runtime.rules.timeLimitSec + 30) * 120;
   while (session.mode !== 'done' && steps < limit) {
-    proxy?.step(world, STEP);
+    proxy?.step(session, STEP);
     soldier?.step(session, STEP);
     session.step(STEP);
     steps++;

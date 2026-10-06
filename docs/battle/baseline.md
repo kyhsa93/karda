@@ -64,7 +64,7 @@
 
 ## 하니스 v1 · 1차 밸런스 (B1-15)
 
-`npm run battle:harness -- --map harek --mode quick --side coalition|veros --player idle|proxy --seeds 20` (`--set 키=값`으로 경기 방식 수치를 덮어써 비교, `--trace`로 분 단위 추이). `proxy`는 플레이어 아파치 대신 봇 공격 헬기(`sim/battle/proxy.ts`)가 거점 근처 사격 위치를 찾아 다니며 통계 사격한다.
+`npm run battle:harness -- --map harek --mode quick --side coalition|veros --player idle|proxy --seeds 20` (`--set 키=값`으로 경기 방식 수치를 덮어써 비교, `--trace`로 분 단위 추이). `proxy`는 플레이어 아파치를 `sim/battle/proxy.ts`의 조종사가 실제로 몬다(#198): 조종 입력(`world.controls`)으로 날고, 레이저·무기 선택·발사 입력으로 기관포·로켓·헬파이어를 플레이어 무기 경로로 쏜다(탄도·잠금·레이저 조건 그대로, 처치는 `byPlayer`). 탄약이 떨어지면 본진 패드에 착륙해 재보급한다. `--aim-error <mrad>`는 조준 오차를 더해 낙제 시험(명중률↓ → 승률↓)에 쓴다.
 
 | 20시드 | 한 판 중앙값 | 플레이어 진영 승률 | 소유 변경 A / D / G |
 | --- | --- | --- | --- |
@@ -155,7 +155,21 @@ PWA가 아무것도 캐시하지 않으므로(`sw.js` no-store) 매 실행이 �
 600 matches in 1264 s on 7 processes.
 
 - 보병이 처음으로 무입력보다 높게 나왔다(연합 +12pp, VPA +8pp). 그러나 구간 위 끝이 25pp·21pp로 띠(20pp)에 걸쳐 있어 아직 **판정 불가**다 — 통과로 볼 근거도, 실패로 볼 근거도 없다.
-- 공격 헬기는 상한이다(#198이 실제 무기 경로로 옮기기 전까지 판정에서 뺀다). 역할 수치는 이 표가 판정을 낼 때까지 바꾸지 않는다(O11).
+- 공격 헬기 행은 이 시점엔 상한이었다(#198에서 실제 무기 경로로 옮겼다 — 아래). 역할 수치는 이 표가 판정을 낼 때까지 바꾸지 않는다(O11).
+
+### 공격 헬기를 실제 무기 경로로(#198)
+
+`proxy`가 봇 통계 사격이 아니라 플레이어 헬기를 직접 몬다(`sim/battle/proxy.ts`: 조종 입력으로 비행, 레이저·기관포·로켓·헬파이어를 플레이어 경로로 발사, 처치는 `byPlayer`). 위 표의 `proxy` 행(98%/99%)은 옛 상한값이고, 같은 100시드 두 진영을 다시 돌린 값은 다음과 같다(`battle:roles --seeds 100`, 14분 24초).
+
+| side | role | wins | 95% interval | − idle | verdict | kills / deaths |
+| --- | --- | --- | --- | --- | --- | --- |
+| coalition | proxy | 60/100 (60%) | 50%–69% | 21pp | **undecided** — beats idle by 7-34pp — more seeds | 2.0 / 1.6 |
+| veros | proxy | 75/100 (75%) | 66%–82% | 25pp | **undecided** — beats idle by 12-37pp — more seeds | 2.5 / 1.5 |
+| veros | (spread) | | | | **undecided** — roles differ by up to 29pp — more seeds | |
+
+낙제 시험(`--aim-error`, 조준에 ±mrad 흔들림, 같은 100시드): 0 mrad 60%/75% → 30 mrad 39%/50% → 100 mrad 44%/53% (연합/VPA). 처치는 2.0 → 0.1 → 0.0으로 떨어지고 승률은 무입력(39%/50%) 수준으로 내려간다. 옛 대리는 명중률을 1/4로 낮춰도 70%였다.
+
+판정은 아직 '판정 불가'다(구간이 띠에 걸침, 시드 더 필요). 통과·실패 근거는 아직 없다.
 
 ### 자동 집중 거점 A/B (#197, 결정 O10 — 제거)
 

@@ -14,18 +14,15 @@ const seeds = Number(arg('seeds', '100'));
 const jobs = Number(arg('jobs', String(Math.max(1, availableParallelism() - 1))));
 const roles = arg('roles', 'idle,soldier,proxy').split(',');
 const check = process.argv.includes('--check');
+const aimError = arg('aim-error', '0');
 const sets = process.argv.flatMap((a, i) => (a === '--set' ? ['--set', process.argv[i + 1]] : []));
-
-const UPPER_BOUND: Record<string, string> = {
-  proxy: 'attack helicopter played by a bot that hits with the bots\' statistical fire (vsUnits), not the player\'s weapons — an upper bound, not judged',
-};
 
 interface Run { seed: number; side: string; player: string; winner: string; inside: number; firstEntry: number | null; firstContact: number | null; endFlips: number; proxyKills: number; proxyDeaths: number }
 
 function chunk(side: string, role: string, from: number, count: number): Promise<Run[]> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['--experimental-transform-types', '--no-warnings', '--import', './scripts/lib/ts.mjs', 'scripts/battle-harness.ts',
-      '--map', map, '--mode', mode, '--side', side, '--player', role, '--seed', String(from), '--seeds', String(count), '--json', ...sets], { stdio: ['ignore', 'pipe', 'inherit'] });
+      '--map', map, '--mode', mode, '--side', side, '--player', role, '--seed', String(from), '--seeds', String(count), '--json', '--aim-error', aimError, ...sets], { stdio: ['ignore', 'pipe', 'inherit'] });
     let out = '';
     child.stdout.on('data', d => { out += d; });
     child.on('close', code => {
@@ -72,7 +69,6 @@ for (const side of sides) {
     let verdict = '—';
     if (role !== 'idle') {
       if (!hasIdle) verdict = 'no idle row to judge against';
-      else if (UPPER_BOUND[role]) verdict = 'upper bound, not judged';
       else { const v = roleVerdict(r, idle); verdict = `**${v.verdict}** — ${v.reason}`; judged.push(r); if (v.verdict === 'fail') failed = true; }
     }
     const entered = rs.filter(x => x.firstEntry !== null);
@@ -82,6 +78,5 @@ for (const side of sides) {
   console.log(`| ${side} | (spread) | | | | **${s.verdict}** — ${s.reason} | | | | | |`);
   if (s.verdict === 'fail') failed = true;
 }
-for (const [role, why] of Object.entries(UPPER_BOUND)) if (roles.includes(role)) console.log(`\n- \`${role}\`: ${why}.`);
 console.log(`\n${runs.length} matches in ${((Date.now() - t0) / 1000).toFixed(0)} s on ${jobs} processes.`);
 if (check && failed) process.exit(1);
