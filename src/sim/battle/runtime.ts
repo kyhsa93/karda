@@ -1,6 +1,7 @@
 import type { AvatarSpawn } from '../avatar';
 import type { SimEvent } from '../events';
 import type { LoadoutDef } from '../heli/loadout';
+import type { SoldierClass } from '../infantry/soldier';
 import type { Objective, ObjectiveState } from '../objective';
 import { FlightSession } from '../session';
 import type { World } from '../world';
@@ -120,8 +121,8 @@ export class BattleRuntime implements Objective {
     return out;
   }
 
-  spawnFor(point: SpawnPoint, kit: LoadoutDef): AvatarSpawn {
-    if (point.role === 'soldier') return { kind: 'soldier', x: point.x, z: point.z, headingDeg: point.headingDeg, cls: 'assault' };
+  spawnFor(point: SpawnPoint, kit: LoadoutDef, cls: SoldierClass = 'assault'): AvatarSpawn {
+    if (point.role === 'soldier') return { kind: 'soldier', x: point.x, z: point.z, headingDeg: point.headingDeg, cls };
     return point.kind === 'pad'
       ? { kind: 'heli', at: 'pad', pad: point.pad, kit, running: true }
       : { kind: 'heli', at: 'air', x: point.x, z: point.z, agl: AIR_SPAWN_AGL, headingDeg: point.headingDeg, kit, speed: AIR_SPAWN_SPEED };

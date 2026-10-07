@@ -13,7 +13,9 @@ export interface InfantryWeaponDef {
 }
 
 export const INFANTRY_WEAPONS = classesJson.weapons as Record<InfantryWeaponId, InfantryWeaponDef>;
-export const CLASS_KITS = classesJson.classes as unknown as Record<SoldierClass, { primary: InfantryWeaponId; gear: InfantryWeaponId[] }>;
+export interface ClassKit { primary: InfantryWeaponId; gear: InfantryWeaponId[]; gearSlots: number; pending: string[] }
+export const CLASS_KITS = classesJson.classes as unknown as Record<SoldierClass, ClassKit>;
+export const CLASS_IDS = Object.keys(CLASS_KITS) as SoldierClass[];
 
 export const RECOVERY = 4.1;
 export const BLOOM_DECAY = 2;
