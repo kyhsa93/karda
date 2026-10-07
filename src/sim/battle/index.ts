@@ -24,6 +24,7 @@ export function brainSystems(intel: Intel | null = null, lethality = 1): BattleS
 
 export { createBattleSession, type SpawnPoint } from './runtime';
 export { KITS, KIT_IDS, type KitId } from './kits';
+export { CLASS_IDS, CLASS_KITS } from '../infantry/arms';
 export type { BattleMapDef } from './schema';
 
 export const MAP_IDS = ['harek'] as const;

@@ -427,6 +427,7 @@
       "spawnBase": "본진 FARP (엔진 켠 채)",
       "spawnBaseAir": "본진 상공 공중 투입",
       "kit": "아파치 무장",
+      "class": "병과",
       "wait": "출격까지 {s}초",
       "go": "출격",
       "quit": "경기 포기",
@@ -437,6 +438,18 @@
       "spawnPoint": "거점 {id}",
       "spawnSquad": "분대 옆 ({id} 근처)",
       "spawnSquadN": "분대 {n} ({id} 근처)"
+    },
+    "classes": {
+      "assault": "돌격",
+      "engineer": "공병",
+      "support": "지원",
+      "recon": "정찰"
+    },
+    "classDesc": {
+      "assault": "거점 점령과 보병 교전. 돌격소총, 유탄.",
+      "engineer": "탈것 파괴와 수리. (장비 준비 중)",
+      "support": "제압과 재보급, 대공. (장비 준비 중)",
+      "recon": "원거리 제거와 발견. (장비 준비 중)"
     },
     "kits": {
       "antiArmor": "대전차 — 헬파이어 16",
