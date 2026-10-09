@@ -13,7 +13,8 @@ export interface InfantryWeaponDef {
 }
 
 export const INFANTRY_WEAPONS = classesJson.weapons as Record<InfantryWeaponId, InfantryWeaponDef>;
-export interface ClassKit { primary: InfantryWeaponId; gear: InfantryWeaponId[]; gearSlots: number; pending: string[] }
+export type ToolId = 'medkit' | 'smoke';
+export interface ClassKit { primary: InfantryWeaponId; gear: InfantryWeaponId[]; tools: ToolId[]; gearSlots: number; pending: string[] }
 export const CLASS_KITS = classesJson.classes as unknown as Record<SoldierClass, ClassKit>;
 export const CLASS_IDS = Object.keys(CLASS_KITS) as SoldierClass[];
 

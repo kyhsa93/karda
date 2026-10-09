@@ -157,6 +157,7 @@ export class Effects {
   private mz = new THREE.Vector3(0, 1, 0);
   private one = new THREE.Vector3(1, 1, 1);
   private rnd = Math.random;
+  private cloudAcc = 0;
 
   constructor(map: THREE.Texture, readonly maxTracers = 128) {
     this.glow = new ParticleLayer(384, material(map, true));
@@ -241,6 +242,16 @@ export class Effects {
         this.smoke.spawn(b.pos.clone().add(this.jitter(b.size)), new THREE.Vector3((this.rnd() - 0.5), 2 + this.rnd() * 2, (this.rnd() - 0.5)), 4, b.size, b.size * 4, 0.7 * fade, CELL.smoke[(this.rnd() * 4) | 0], 0.8, 0.3);
         if (this.rnd() < 0.6 * fade) this.glow.spawn(b.pos.clone().add(this.jitter(b.size * 0.6)), new THREE.Vector3(0, 1.5, 0), 0.6, b.size * 0.8, b.size * 0.4, 0.9, CELL.fire);
       }
+    }
+    this.cloudAcc += dt;
+    while (this.cloudAcc > 0.2) {
+      this.cloudAcc -= 0.2;
+      const gear = world.soldierGear;
+      for (const c of gear.clouds) {
+        const fade = Math.min(1, (c.until - world.time) / 4);
+        for (let i = 0; i < 3; i++) this.smoke.spawn(new THREE.Vector3(c.x, c.y + 1, c.z).add(this.jitter(c.r * 1.2)), this.jitter(0.6), 5, c.r * 0.5, c.r * 0.7, 0.55 * fade, CELL.dust[(this.rnd() * 4) | 0], 0.1, 0.2);
+      }
+      if (gear.medkit) this.glow.spawn(gear.medkit.pos.clone().setY(gear.medkit.pos.y + 0.6), new THREE.Vector3(0, 0.6, 0), 0.9, 0.5, 0.3, 0.7, CELL.flash);
     }
     for (const p of world.projectiles) {
       if (!p.burn || p.burn <= 0) continue;

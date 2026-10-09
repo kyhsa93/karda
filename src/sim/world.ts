@@ -14,6 +14,7 @@ import { createSoldier, createSoldierCommands, REGEN_DELAY, REGEN_RATE, SOLDIER_
 import { createMotion, setStance, sprinting, stepSoldier, type SoldierMotion } from './infantry/movement';
 import { createArms as createSoldierArms, select, startReload, stepArms, type InfantryWeaponId, type SoldierArms } from './infantry/arms';
 import { soldierEye } from './infantry/soldier';
+import { createGear, placeMedkit, stepGear, throwSmoke, type SoldierGear } from './infantry/gear';
 import { toggleEngine } from './heli/systems';
 import { blastShares, DAMAGED, hitSystem, randomHitPoint, ROTOR_FAIL_SECONDS, systemAt, type SystemId } from './heli/damage';
 import type { CrashReason } from './events';
@@ -65,6 +66,7 @@ export class World {
   soldierCommands: SoldierCommands = createSoldierCommands();
   soldierMotion: SoldierMotion = createMotion();
   soldierArms: SoldierArms = createSoldierArms('assault');
+  soldierGear: SoldierGear = createGear('assault');
   soldierLastShot = -Infinity;
   soldierHurtAt = -Infinity;
   spotRequest = false;
@@ -147,6 +149,9 @@ export class World {
       this.soldierCommands.yaw = this.soldier.yaw;
       this.soldierMotion = createMotion();
       this.soldierArms = createSoldierArms(s.cls);
+      this.soldierGear = createGear(s.cls);
+      this.los.smokes = this.soldierGear.clouds;
+      this.los.clear();
       this.commands.fire = false;
       this.avatar = { kind: 'soldier' };
       return;
@@ -173,6 +178,15 @@ export class World {
 
   selectSoldierWeapon(id: InfantryWeaponId) {
     if (this.soldier?.alive) select(this.soldierArms, id);
+  }
+
+  placeMedkit() {
+    return !!this.soldier?.alive && placeMedkit(this.soldierGear, this.soldier, this.terrain, this.time);
+  }
+
+  throwSmoke() {
+    const s = this.soldier;
+    return !!s?.alive && this.active && throwSmoke(this.soldierGear, s, soldierEye(s, this.tmpEye));
   }
 
   setStance(next: Stance) {
@@ -505,6 +519,11 @@ export class World {
 
     const h = this.player;
     if (this.active && this.avatar.kind === 'soldier' && this.soldier?.alive) this.stepSoldier(this.soldier, dt);
+    if (this.active) {
+      const gear = this.soldierGear;
+      stepGear(gear, { now: this.time, dt, terrain: this.terrain, units: this.units, playerSide: this.playerSide, soldier: this.avatar.kind === 'soldier' ? this.soldier : null });
+      if (gear.dirty) { gear.dirty = false; this.los.clear(); }
+    }
     if (this.active && this.avatar.kind === 'heli' && h.alive) {
       this.updateWeight();
       this.stepRotorFailure(dt);

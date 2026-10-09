@@ -7,6 +7,8 @@ export const SOLDIER_COMMANDS: Readonly<Record<string, Command>> = {
   KeyC: 'crouch',
   KeyZ: 'prone',
   KeyR: 'reload',
+  KeyX: 'medkit',
+  KeyF: 'smoke',
   Digit1: 'weapon1',
   Digit2: 'weapon2',
   Digit3: 'weapon3',
