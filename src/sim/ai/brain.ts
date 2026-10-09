@@ -100,8 +100,8 @@ function fireAtSoldier(world: World, u: Unit, eye: Vector3, dist: number, dt: nu
   u.ai.fireAcc += v.rate * dt;
   while (u.ai.fireAcc >= 1) {
     u.ai.fireAcc -= 1;
-    const hit = world.rng() < v.p;
-    const to = hit ? target.clone() : scatter(target, dist, world.rng);
+    const hit = world.playerRng() < v.p;
+    const to = hit ? target.clone() : scatter(target, dist, world.fxRng);
     world.emit({ t: 'fire', weapon: w?.id ?? 'g_rifle', pos: eye.clone(), dir: to.sub(eye).normalize(), owner: u.id, tracer: true });
     if (hit) world.emit({ t: 'playerHit', by: u.id, weapon: w?.id ?? 'g_rifle', damage: v.damage / SOLDIER_DAMAGE_SCALE });
   }
@@ -115,9 +115,9 @@ function fire(world: World, u: Unit, eye: Vector3, dist: number, dt: number) {
     u.ai.fireAcc += w.rate * dt;
     while (u.ai.fireAcc >= 1) {
       u.ai.fireAcc -= 1;
-      const hit = world.rng() < unitHitChance(world, u, w, range);
+      const hit = world.playerRng() < unitHitChance(world, u, w, range);
       const target = world.playerBody().pos.clone();
-      if (!hit) target.add(new Vector3(world.rng() - 0.5, world.rng() - 0.5, world.rng() - 0.5).multiplyScalar(30 + range * 0.02));
+      if (!hit) target.add(new Vector3(world.fxRng() - 0.5, world.fxRng() - 0.5, world.fxRng() - 0.5).multiplyScalar(30 + range * 0.02));
       const dir = target.sub(eye).normalize();
       world.emit({ t: 'fire', weapon: w.id, pos: eye.clone(), dir, owner: u.id, tracer: true });
       if (hit) world.emit({ t: 'playerHit', by: u.id, weapon: w.id, damage: w.damage });

@@ -19,6 +19,9 @@ const stance = arg('stance', 'cover') as ProxyStance;
 const seeds = Number(arg('seeds', '20'));
 const first = Number(arg('seed', '1'));
 const aimError = Number(arg('aim-error', '0'));
+const levelArg = arg('level', '');
+const level = levelArg === '' ? null : Number(levelArg);
+if (level !== null && !Number.isInteger(level)) throw new Error(`--level ${levelArg}: expected an integer 0..3`);
 const trace = process.argv.includes('--trace');
 const json = process.argv.includes('--json');
 const overrides = process.argv.flatMap((a, i) => (a === '--set' ? [process.argv[i + 1]] : []));
@@ -52,7 +55,7 @@ function play(seed: number): Run {
   world.events.on('unitDestroyed', () => { kills++; });
   const proxy = player === 'proxy' ? new ProxyPilot(runtime, side) : null;
   if (proxy) proxy.aimErrorMrad = aimError;
-  const soldier = player === 'soldier' ? new SoldierProxy(runtime, side, stance) : null;
+  const soldier = player === 'soldier' ? new SoldierProxy(runtime, side, stance, level) : null;
   const t0 = performance.now();
   let steps = 0;
   let inside = 0, firstEntry: number | null = null, stalled = 0, firstContact: number | null = null;
@@ -95,7 +98,7 @@ const runs: Run[] = [];
 for (let s = first; s < first + seeds; s++) {
   const r = play(s);
   runs.push(r);
-  if (json) { console.log(`RUN ${JSON.stringify({ ...r, side, player })}`); continue; }
+  if (json) { console.log(`RUN ${JSON.stringify({ ...r, side, player, level })}`); continue; }
   console.log(`seed ${String(r.seed).padStart(3)}  ${r.minutes.toFixed(1).padStart(5)} min  ${r.winner.padEnd(9)}  tickets ${r.tickets.padEnd(8)}  flips ${Object.entries(r.flips).map(([k, v]) => `${k}${v}`).join(' ')}  kills ${r.kills}${player !== 'idle' ? `  proxy ${r.proxyKills}/${r.proxyDeaths}` : ''}${player === 'soldier' ? `  life ${r.life.toFixed(0)}s  inside ${r.inside.toFixed(0)}s  entry ${r.firstEntry === null ? '-' : `${r.firstEntry.toFixed(0)}s`}  stalled ${r.stalled}s` : ''}`);
 }
 if (json) process.exit(0);
@@ -108,7 +111,7 @@ const middle = runs.filter(r => Object.entries(r.flips).some(([id, v]) => !Objec
 const decided = runs.filter(r => r.winner === 'coalition' || r.winner === 'veros');
 const loserFell = decided.filter(r => r.fell.includes(r.winner === 'coalition' ? 'veros' : 'coalition')).length;
 console.log('');
-console.log(`| ${mapId} ${mode} · ${side} · ${player}${player === 'soldier' ? ` (${stance})` : ''} · ${runs.length} seeds | value |`);
+console.log(`| ${mapId} ${mode} · ${side} · ${player}${player === 'soldier' ? ` (${stance}${level === null ? '' : `, L${level}`})` : ''} · ${runs.length} seeds | value |`);
 console.log('| --- | --- |');
 console.log(`| median length | ${median.toFixed(1)} min (min ${sorted[0].toFixed(1)}, max ${sorted[sorted.length - 1].toFixed(1)}) |`);
 console.log(`| ${side} wins | ${wins}/${runs.length} (${((wins / runs.length) * 100).toFixed(0)}%), draws ${draws} |`);

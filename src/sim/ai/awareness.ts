@@ -131,7 +131,7 @@ export function stepAwareness(world: World, los: LosCache, cond: Conditions, dt 
       }
       if (u.ai.radar === 'search') {
         const p = cond.playerRadar || cued ? 1 : Math.min(1, (h.agl < RADAR_CLUTTER_AGL ? RADAR_P_LOW : RADAR_P) * world.difficulty.detection);
-        if (world.rng() < p) { setRadar(world, u, 'acquire'); u.ai.radarTimer = 0; detect(world, u, 'radar'); }
+        if (world.playerRng() < p) { setRadar(world, u, 'acquire'); u.ai.radarTimer = 0; detect(world, u, 'radar'); }
         else forget(world, u, dt);
       } else {
         detect(world, u, 'radar');

@@ -65,14 +65,14 @@ export function missileInbound(world: World) {
 export function decoyFlare(world: World, m: EnemyMissile, flare: Flare) {
   if (m.kind !== 'ir' || !m.guiding || m.target) return false;
   const p = m.pos.distanceTo(world.player.pos) <= FLARE_CLOSE ? FLARE_P_CLOSE : FLARE_P;
-  if (world.rng() >= p) return false;
+  if (world.playerRng() >= p) return false;
   m.target = flare.pos;
   return true;
 }
 
 export function decoyChaff(world: World, m: EnemyMissile) {
   if (m.kind !== 'radar' || !m.guiding) return false;
-  if (world.rng() >= CHAFF_P) return false;
+  if (world.playerRng() >= CHAFF_P) return false;
   m.guiding = false;
   return true;
 }

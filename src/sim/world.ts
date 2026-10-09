@@ -56,9 +56,21 @@ export interface BattleHooks {
 
 export interface NavTarget { x: number; y: number; z: number; name: string; area?: boolean; raw?: boolean }
 
+export const FX_SALT = 0x5bd1e995;
+export const PLAYER_SALT = 0x27d4eb2f;
+
+function streamSeed(seed: number, salt: number) {
+  let x = (seed ^ salt) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x85ebca6b);
+  x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+  return (x ^ (x >>> 16)) >>> 0;
+}
+
 export class World {
   time = 0;
   readonly rng: () => number;
+  readonly fxRng: () => number;
+  readonly playerRng: () => number;
   readonly terrain: Terrain;
   player!: HeliState;
   avatar: Avatar = { kind: 'heli' };
@@ -119,6 +131,8 @@ export class World {
 
   constructor(opts: { seed: number; terrain?: TerrainOptions; terrainSeed?: number }) {
     this.rng = rng(opts.seed);
+    this.fxRng = rng(streamSeed(opts.seed, FX_SALT));
+    this.playerRng = rng(streamSeed(opts.seed, PLAYER_SALT));
     this.terrain = new Terrain(opts.terrainSeed ?? opts.seed, opts.terrain);
     this.los = new LosCache(this.terrain);
     this.events.on('playerHit', e => this.hitPlayer(e.by, e.damage));
@@ -199,7 +213,7 @@ export class World {
     s.yaw = c.yaw + a.recoilYaw;
     s.pitch = c.pitch + a.recoilPitch;
     const canFire = s.alive && !sprinting(s, c, this.soldierMotion) && this.soldierMotion.stanceTimer === 0 && !this.soldierMotion.vault;
-    const shots = stepArms(s, a, c.fire, soldierEye(s, this.tmpEye), { rng: this.rng, nextId: () => this.nextProjectileId++, ads: c.ads, canFire }, dt);
+    const shots = stepArms(s, a, c.fire, soldierEye(s, this.tmpEye), { rng: this.playerRng, nextId: () => this.nextProjectileId++, ads: c.ads, canFire }, dt);
     if (shots.length) this.soldierLastShot = this.time;
     if (s.alive && this.time - this.soldierHurtAt >= REGEN_DELAY) s.hp = Math.min(SOLDIER_HP, s.hp + REGEN_RATE * dt);
     for (const p of shots) {
@@ -403,7 +417,7 @@ export class World {
     if (!h.alive || amount <= 0) return;
     const u = this.unit(byUnit);
     const from = u ? u.pos.clone().sub(h.pos).applyQuaternion(h.q.clone().invert()) : new Vector3(1, 0, 0);
-    this.damageSystem(systemAt(randomHitPoint(this.rng, from)), amount);
+    this.damageSystem(systemAt(randomHitPoint(this.playerRng, from)), amount);
   }
 
   blastPlayer(at: Vector3, amount: number) {
@@ -652,7 +666,7 @@ export class World {
   private disperse(dir: Vector3, mrad: number) {
     const h = this.player;
     const spread = mrad / 1000 * (Math.hypot(h.vel.x, h.vel.z) > 10.3 ? 1.5 : 1);
-    const ang = this.rng() * Math.PI * 2, rad = Math.sqrt(this.rng()) * spread;
+    const ang = this.playerRng() * Math.PI * 2, rad = Math.sqrt(this.playerRng()) * spread;
     const side = new Vector3(0, 1, 0).cross(dir).normalize();
     const up = dir.clone().cross(side).normalize();
     return dir.addScaledVector(side, Math.cos(ang) * rad).addScaledVector(up, Math.sin(ang) * rad).normalize();

@@ -19,8 +19,29 @@ export function diffInterval(a: Rate, b: Rate, z: number = P0.z): [number, numbe
 
 export type Verdict = 'pass' | 'fail' | 'undecided';
 
-export function roleVerdict(role: Rate, idle: Rate): { verdict: Verdict; reason: string } {
-  const [lo, hi] = diffInterval(role, idle);
+export interface Pairs { n: number; onlyRole: number; onlyIdle: number }
+
+export function pairs(role: Map<number, boolean>, idle: Map<number, boolean>): Pairs {
+  let n = 0, onlyRole = 0, onlyIdle = 0;
+  for (const [seed, won] of role) {
+    const other = idle.get(seed);
+    if (other === undefined) continue;
+    n++;
+    if (won && !other) onlyRole++;
+    else if (!won && other) onlyIdle++;
+  }
+  return { n, onlyRole, onlyIdle };
+}
+
+export function pairedInterval({ n, onlyRole, onlyIdle }: Pairs, z: number = P0.z): [number, number] {
+  if (n === 0) return [-1, 1];
+  const m = n + 2, b = onlyRole + 0.5, c = onlyIdle + 0.5;
+  const d = (b - c) / m, h = z * Math.sqrt(Math.max(0, b + c - (b - c) ** 2 / m)) / m;
+  return [Math.max(-1, d - h), Math.min(1, d + h)];
+}
+
+export function roleVerdict(role: Rate, idle: Rate, diff?: [number, number]): { verdict: Verdict; reason: string } {
+  const [lo, hi] = diff ?? diffInterval(role, idle);
   const [, roleHi] = wilson(role);
   const [roleLo] = wilson(role);
   if (roleLo >= P0.ceiling) return { verdict: 'fail', reason: `wins too surely (${(roleLo * 100).toFixed(0)}% at least)` };
@@ -39,4 +60,22 @@ export function spreadVerdict(rates: Rate[]): { verdict: Verdict; reason: string
   if (worstLo > P0.spread) return { verdict: 'fail', reason: `roles differ by at least ${(worstLo * 100).toFixed(0)}pp` };
   if (worstHi <= P0.spread) return { verdict: 'pass', reason: `roles differ by at most ${(worstHi * 100).toFixed(0)}pp` };
   return { verdict: 'undecided', reason: `roles differ by up to ${(worstHi * 100).toFixed(0)}pp — more seeds` };
+}
+
+export function monotoneVerdict(levels: Rate[]): { verdict: Verdict; reason: string } {
+  if (levels.length < 2) return { verdict: 'undecided', reason: 'one level' };
+  let drop = 0;
+  for (let i = 0; i < levels.length; i++) for (let j = i + 1; j < levels.length; j++) {
+    const [, hi] = diffInterval(levels[j], levels[i]);
+    if (hi < 0) drop = Math.max(drop, -hi);
+  }
+  if (drop > 0) return { verdict: 'fail', reason: `a higher level wins at least ${(drop * 100).toFixed(0)}pp less than a lower one` };
+  return { verdict: 'pass', reason: 'no higher level wins less outside the 95% intervals' };
+}
+
+export function seedsToVerdict(n: number, step: number, verdictAt: (k: number) => Verdict): number | null {
+  const final = verdictAt(n);
+  if (final === 'undecided') return null;
+  for (let k = step; k < n; k += step) if (verdictAt(k) === final) return k;
+  return n;
 }

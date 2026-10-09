@@ -84,8 +84,8 @@ export function launchHellfire(world: World, sol: HellfireSolution, id: number):
   }
   const aim = sol.aim.clone();
   if (sol.mode === 'loal') {
-    const err = Math.max(LOAL_NAV_ERROR_MIN, (sol.range ?? 0) * LOAL_NAV_ERROR) * (0.7 + 0.6 * world.rng());
-    const a = world.rng() * Math.PI * 2;
+    const err = Math.max(LOAL_NAV_ERROR_MIN, (sol.range ?? 0) * LOAL_NAV_ERROR) * (0.7 + 0.6 * world.playerRng());
+    const a = world.playerRng() * Math.PI * 2;
     aim.x += Math.sin(a) * err; aim.z += Math.cos(a) * err;
     aim.y = world.terrain.surfaceAt(aim.x, aim.z);
   }
