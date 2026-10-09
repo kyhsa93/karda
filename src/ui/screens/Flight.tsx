@@ -88,6 +88,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       case 'weapon1': if (sim.avatar.kind === 'soldier') sim.selectSoldierWeapon('rifle'); else sim.selectWeapon(1); break;
       case 'weapon2': if (sim.avatar.kind === 'soldier') sim.selectSoldierWeapon('grenade'); else sim.selectWeapon(2); break;
       case 'reload': sim.reloadSoldier(); break;
+      case 'medkit': sim.placeMedkit(); break;
+      case 'smoke': sim.throwSmoke(); break;
       case 'spot': sim.spotRequest = true; break;
       case 'weapon3': sim.selectWeapon(3); break;
       case 'weapon4': sim.selectWeapon(4); break;
@@ -339,6 +341,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
           <div className="soldier-gear">
             <button className="tbtn" onPointerDown={press(() => runCommand(sim.soldierArms.selected === 'rifle' ? 'weapon2' : 'weapon1'))}>{t(sim.soldierArms.selected === 'rifle' ? 'touch.toGrenade' : 'touch.toRifle')}</button>
             <button className="tbtn" onPointerDown={press(() => runCommand('reload'))}>{t('touch.reload')}</button>
+            {sim.soldierGear.medkitLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('medkit'))}>{t('touch.medkit')}</button>}
+            {sim.soldierGear.smokeLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('smoke'))}>{t('touch.smoke')}</button>}
           </div>
           <button className="tbtn stance" {...stanceHold()}>{t(`touch.stance.${sim.soldier?.stance ?? 'stand'}`)}</button>
           <button className={`tbtn ads${input.touchAds ? ' on' : ''}`} onPointerDown={press(() => { input.touchAds = !input.touchAds; setTouchKey(k => k + 'a'); })}>{t('touch.ads')}</button>

@@ -1,4 +1,5 @@
 import type { Vector3 } from 'three';
+import { smokeBlocks, type SmokeCloud } from './infantry/gear';
 import { segmentBlocked, type Obstacle } from './obstacles';
 import type { Terrain, Tree } from './terrain';
 
@@ -84,6 +85,7 @@ export class LosCache {
   private entries = new Map<number, Entry>();
   computed = 0;
   obstacles: readonly Obstacle[] = [];
+  smokes: readonly SmokeCloud[] = [];
 
   constructor(private terrain: Terrain) {}
 
@@ -94,7 +96,7 @@ export class LosCache {
     this.computed++;
     const blocked = this.obstacles.length > 0 && obstacleBlocks(this.obstacles, observer, target);
     const fresh: Entry = {
-      sight: blocked ? { clear: false, occlusion: 1 } : visualSight(this.terrain, observer, target), radar: !blocked && radarSight(this.terrain, observer, target),
+      sight: blocked || (this.smokes.length > 0 && smokeBlocks(this.smokes, observer, target)) ? { clear: false, occlusion: 1 } : visualSight(this.terrain, observer, target), radar: !blocked && radarSight(this.terrain, observer, target),
       ox: observer.x, oy: observer.y, oz: observer.z, tx: target.x, ty: target.y, tz: target.z, time,
     };
     this.entries.set(key, fresh);

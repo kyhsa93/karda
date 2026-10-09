@@ -4,9 +4,13 @@
     "grenade": { "projectile": "grenade", "mag": 1, "reserve": 5, "rate": 1, "reload": 1.5, "spreadHipDeg": 0.5, "spreadAdsDeg": 0.2, "recoilDeg": 1.5, "recoilAdsDeg": 1, "recoilYawDeg": 0.3, "bloomMax": 1, "bloomPerShot": 0, "auto": false }
   },
   "classes": {
-    "assault": { "primary": "rifle", "gear": ["grenade"], "gearSlots": 3, "pending": ["medkit", "smoke"] },
-    "engineer": { "primary": "rifle", "gear": [], "gearSlots": 3, "pending": ["carbine", "at_rocket", "repair_tool", "at_mine"] },
-    "support": { "primary": "rifle", "gear": [], "gearSlots": 3, "pending": ["lmg", "ammo_box", "manpads"] },
-    "recon": { "primary": "rifle", "gear": [], "gearSlots": 3, "pending": ["sniper", "binoculars", "laser_designator", "spawn_beacon"] }
+    "assault": { "primary": "rifle", "gear": ["grenade"], "tools": ["medkit", "smoke"], "gearSlots": 3, "pending": [] },
+    "engineer": { "primary": "rifle", "gear": [], "tools": [], "gearSlots": 3, "pending": ["carbine", "at_rocket", "repair_tool", "at_mine"] },
+    "support": { "primary": "rifle", "gear": [], "tools": [], "gearSlots": 3, "pending": ["lmg", "ammo_box", "manpads"] },
+    "recon": { "primary": "rifle", "gear": [], "tools": [], "gearSlots": 3, "pending": ["sniper", "binoculars", "laser_designator", "spawn_beacon"] }
+  },
+  "tools": {
+    "medkit": { "count": 1, "radius": 5, "healPerSec": 10, "returnEvery": 15, "returnHp": 8, "duration": 60, "redeployCooldown": 30, "placeDistance": 1.5 },
+    "smoke": { "count": 2, "radius": 8, "duration": 20, "throwSpeed": 18, "throwLift": 0.15, "center": 2, "flightMax": 6 }
   }
 }

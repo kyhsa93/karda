@@ -91,6 +91,8 @@
     "moveStick": "이동",
     "toGrenade": "유탄",
     "toRifle": "소총",
+    "medkit": "구급 상자",
+    "smoke": "연막",
     "reload": "재장전",
     "ads": "조준",
     "stance": {
@@ -481,6 +483,11 @@
         "enemy": "적이 거점 {id}를 점령했다"
       },
       "hp": "체력 {n}",
+      "medkit": "구급 상자 {state}",
+      "medkitReady": "준비",
+      "medkitActive": "{n}초",
+      "medkitWait": "재배치 {n}초",
+      "smoke": "연막탄 {n}",
       "reloading": "재장전 중",
       "weapon": {
         "rifle": "소총",
