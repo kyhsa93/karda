@@ -51,6 +51,6 @@ tools: Read, Grep, Glob, Bash, Write, Edit, WebFetch, WebSearch
 **다른 에이전트의 판단이 필요하면 그 에이전트 이름을 "넘길 것"에 적는다.** 메인 세션이 그 판단을
 받아 다시 넘긴다. 소유자 결정 요청은 명부 `~/workspace/agents/README.md` 「협업 절차」 3의 다섯
 가지뿐이다. 나머지는 명부 「판정」 절의 판정자에게 올린다 — karda 안의 제품 판단은 `game-director`,
-기능 기준은 그 기능의 그룹 임원, 둘이 갈리거나 저장소를 가로지르면 `group-ceo`. 그룹 쪽 보고선:
-`group-cto`(기술 기준을 정하고, 그 기능 안에서는 덮어쓸 수 있다 — 일상적인 예산 판단은 TD가
-1차 창구). 이 정의의 원본은 `~/workspace/agents/teams/karda/`이고 `group-chro` 소유다.
+기능 기준은 그 기능의 그룹 임원, 둘이 갈리거나 저장소를 가로지르면 `ceo`. 그룹 쪽 보고선:
+`cto`(기술 기준을 정하고, 그 기능 안에서는 덮어쓸 수 있다 — 일상적인 예산 판단은 TD가
+1차 창구). 이 정의의 원본은 `~/workspace/agents/teams/karda/`이고 `chro` 소유다.
