@@ -33,6 +33,22 @@ export const FIELD_MARGIN = 1000;
 export const APPROACH = 500;
 export const HURT_MEMORY = 15;
 export const DUCK_TIME = 4;
+export const WOBBLE_EVERY = 0.25;
+
+export interface SkillLevel { aimMrad: number; reactSec: number; scanSec: number }
+
+export const SKILL_LEVELS: readonly SkillLevel[] = [
+  { aimMrad: 100, reactSec: 0.8, scanSec: 1.0 },
+  { aimMrad: 30, reactSec: 0.5, scanSec: 0.5 },
+  { aimMrad: 10, reactSec: 0.3, scanSec: 0.25 },
+  { aimMrad: 3, reactSec: 0.15, scanSec: 0.1 },
+];
+
+export function skillLevel(level: number): SkillLevel {
+  const s = SKILL_LEVELS[level];
+  if (!s) throw new Error(`skill level ${level}: expected 0..${SKILL_LEVELS.length - 1}`);
+  return s;
+}
 
 export class SoldierProxy {
   kills = 0;
@@ -43,6 +59,10 @@ export class SoldierProxy {
   private enemy: Unit | null = null;
   private cover: [number, number] | null = null;
   private scanIn = 0;
+  private reactIn = 0;
+  private wobbleIn = 0;
+  private readonly wobble = { yaw: 0, pitch: 0 };
+  private readonly skill: SkillLevel | null;
   private burst = 0;
   private stuckAt: [number, number, number] | null = null;
   private detour = 0;
@@ -56,7 +76,9 @@ export class SoldierProxy {
   private readonly eye = new Vector3();
   private readonly aim = new Vector3();
 
-  constructor(readonly runtime: BattleRuntime, readonly side: BattleSide, readonly stance: ProxyStance = 'cover') {}
+  constructor(readonly runtime: BattleRuntime, readonly side: BattleSide, readonly stance: ProxyStance = 'cover', readonly level: number | null = null) {
+    this.skill = level === null ? null : skillLevel(level);
+  }
 
   step(session: FlightSession, dt: number) {
     const world = session.world;
@@ -75,8 +97,15 @@ export class SoldierProxy {
     this.at = [s.pos.x, s.pos.z];
     const c = world.soldierCommands;
     c.forward = 0; c.right = 0; c.sprint = false; c.jump = false; c.fire = false; c.ads = false;
-    if ((this.scanIn -= dt) <= 0) { this.scanIn = SCAN_EVERY; this.enemy = this.findEnemy(world); if (this.enemy && this.stance === 'cover') this.cover = this.findCover(world, this.enemy); }
-    const e = this.enemy?.alive ? this.enemy : null;
+    if ((this.scanIn -= dt) <= 0) {
+      this.scanIn = this.skill?.scanSec ?? SCAN_EVERY;
+      const seen = this.enemy;
+      this.enemy = this.findEnemy(world);
+      if (this.enemy && this.enemy !== seen) this.reactIn = this.skill?.reactSec ?? 0;
+      if (this.enemy && this.stance === 'cover') this.cover = this.findCover(world, this.enemy);
+    }
+    if (this.reactIn > 0) this.reactIn -= dt;
+    const e = this.enemy?.alive && this.reactIn <= 0 ? this.enemy : null;
     if (e) {
       if (this.cover && Math.hypot(this.cover[0] - s.pos.x, this.cover[1] - s.pos.z) > 1.5) {
         this.walkTo(world, this.cover[0], this.cover[1], false);
@@ -175,8 +204,13 @@ export class SoldierProxy {
     soldierEye(s, this.eye);
     const dx = this.aim.x - this.eye.x, dy = this.aim.y - this.eye.y, dz = this.aim.z - this.eye.z;
     const h = Math.hypot(dx, dz);
-    c.yaw = Math.atan2(-dx, -dz);
-    c.pitch = Math.atan2(dy, h) + (4.9 * h) / RIFLE_SPEED ** 2;
+    if (this.skill && (this.wobbleIn -= dt) <= 0) {
+      this.wobbleIn = WOBBLE_EVERY;
+      const m = this.skill.aimMrad / 1000;
+      this.wobble.yaw = (world.playerRng() * 2 - 1) * m; this.wobble.pitch = (world.playerRng() * 2 - 1) * m;
+    }
+    c.yaw = Math.atan2(-dx, -dz) + this.wobble.yaw;
+    c.pitch = Math.atan2(dy, h) + (4.9 * h) / RIFLE_SPEED ** 2 + this.wobble.pitch;
     c.ads = true;
     if (a.selected !== 'rifle') world.selectSoldierWeapon('rifle');
     if (a.ammo.rifle && a.ammo.rifle.mag === 0) world.reloadSoldier();

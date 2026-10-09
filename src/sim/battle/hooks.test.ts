@@ -33,12 +33,12 @@ function hash(w: World) {
 describe('battle hooks (B1-2)', () => {
   it('leaves a world without hooks stepping exactly as before', () => {
     const w = scenario();
-    expect(hash(w)).toBe(792702309);
+    expect(hash(w)).toBe(228720398);
   }, 60000);
 
   it('steps the same with empty hooks installed', () => {
     const w = scenario(world => { world.battleHooks = composeHooks({ tick10Hz: [], tick1Hz: [] }); });
-    expect(hash(w)).toBe(792702309);
+    expect(hash(w)).toBe(228720398);
   }, 60000);
 
   it('calls the hooks at 10 Hz and 1 Hz in order, even while the player is not flying', () => {

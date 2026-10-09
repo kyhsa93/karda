@@ -64,7 +64,7 @@ function fireAt(world: World, u: Unit, o: Unit, dt: number, lethality: number) {
       const hit = world.rng() < hitChance(w, d, (u.skill ?? 1) * lethality);
       if (seen) {
         dir.copy(at);
-        if (!hit) dir.add(new Vector3(world.rng() - 0.5, world.rng() - 0.5, world.rng() - 0.5).multiplyScalar(10 + d * 0.02));
+        if (!hit) dir.add(new Vector3(world.fxRng() - 0.5, world.fxRng() - 0.5, world.fxRng() - 0.5).multiplyScalar(10 + d * 0.02));
         dir.sub(eye).normalize();
         world.emit({ t: 'fire', weapon: w.id, pos: eye.clone(), dir: dir.clone(), owner: u.id, tracer: w.kind === 'bullet' });
       }

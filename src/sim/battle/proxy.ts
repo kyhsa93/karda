@@ -200,7 +200,7 @@ export class ProxyPilot {
     if ((this.wobbleIn -= dt) <= 0) {
       this.wobbleIn = 0.25;
       const m = this.aimErrorMrad / 1000;
-      this.wobble.yaw = (world.rng() * 2 - 1) * m; this.wobble.pitch = (world.rng() * 2 - 1) * m;
+      this.wobble.yaw = (world.playerRng() * 2 - 1) * m; this.wobble.pitch = (world.playerRng() * 2 - 1) * m;
     }
     unitCenter(e, this.center);
     aimToward(h, this.center, this.aim);

@@ -156,7 +156,7 @@ describe('AGM-114K Hellfire (04-weapons-and-sensors.md 4.2, 4.3)', () => {
   });
 
   it('a remote laser guides the missile without the player seeing the target', () => {
-    const { world } = makeWorld(7);
+    const { world } = makeWorld(8);
     const { low, high, target } = findHidden(world);
     place(world, high, target);
     const tank = world.spawnUnit('tank', target.x, target.z);
