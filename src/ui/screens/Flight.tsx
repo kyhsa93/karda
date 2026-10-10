@@ -17,6 +17,7 @@ import { zoomTads } from '../../sim/sensors/tads';
 import { sightPoint } from '../../sim/weapons/ballistics';
 import { hellfireSolution } from '../../sim/weapons/hellfire';
 import { rocketSolution } from '../../sim/weapons/rockets';
+import { CLASS_KITS } from '../../sim/infantry/arms';
 import { PREVENT_DEFAULT, type Command } from '../../input/bindings';
 import { roleCommand, roleOf, wantsPointerLock } from '../../input/roles';
 import { FlightInput } from '../../input/input';
@@ -85,11 +86,12 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const runCommand = (cmd: Command) => {
     switch (cmd) {
       case 'engine': sim.toggleEngine(); break;
-      case 'weapon1': if (sim.avatar.kind === 'soldier') sim.selectSoldierWeapon('rifle'); else sim.selectWeapon(1); break;
-      case 'weapon2': if (sim.avatar.kind === 'soldier') sim.selectSoldierWeapon('grenade'); else sim.selectWeapon(2); break;
+      case 'weapon1': if (sim.avatar.kind === 'soldier') sim.selectSoldierWeapon(CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary); else sim.selectWeapon(1); break;
+      case 'weapon2': if (sim.avatar.kind === 'soldier') sim.selectSoldierWeapon(CLASS_KITS[sim.soldier?.cls ?? 'assault'].gear[0] ?? 'grenade'); else sim.selectWeapon(2); break;
       case 'reload': sim.reloadSoldier(); break;
       case 'medkit': sim.placeMedkit(); break;
       case 'smoke': sim.throwSmoke(); break;
+      case 'mine': sim.placeMine(); break;
       case 'spot': sim.spotRequest = true; break;
       case 'weapon3': sim.selectWeapon(3); break;
       case 'weapon4': sim.selectWeapon(4); break;
@@ -339,9 +341,11 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
           <VirtualStick className={`stick left size-${settings.controls.touchStickSize}`} radius={STICK_RADIUS[settings.controls.touchStickSize]} label={t('touch.moveStick')} onMove={(x, y) => { input.touch.lx = x; input.touch.ly = y; }} />
           <button className="tbtn pause" aria-label={t('touch.pause')} onPointerDown={press(() => setHelp(true))}>≡</button>
           <div className="soldier-gear">
-            <button className="tbtn" onPointerDown={press(() => runCommand(sim.soldierArms.selected === 'rifle' ? 'weapon2' : 'weapon1'))}>{t(sim.soldierArms.selected === 'rifle' ? 'touch.toGrenade' : 'touch.toRifle')}</button>
+            <button className="tbtn" onPointerDown={press(() => runCommand(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? 'weapon2' : 'weapon1'))}>{t(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? (sim.soldierArms.ammo.at_rocket ? 'touch.toRocket' : 'touch.toGrenade') : 'touch.toRifle')}</button>
             <button className="tbtn" onPointerDown={press(() => runCommand('reload'))}>{t('touch.reload')}</button>
             {sim.soldierGear.medkitLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('medkit'))}>{t('touch.medkit')}</button>}
+            {sim.soldierGear.repairable && <button className="tbtn" {...hold(on => { input.touchRepair = on; })}>{t('touch.repair')}</button>}
+            {sim.soldierGear.mineLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('mine'))}>{t('touch.mine')}</button>}
             {sim.soldierGear.smokeLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('smoke'))}>{t('touch.smoke')}</button>}
           </div>
           <button className="tbtn stance" {...stanceHold()}>{t(`touch.stance.${sim.soldier?.stance ?? 'stand'}`)}</button>

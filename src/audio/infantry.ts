@@ -41,9 +41,11 @@ export class InfantryAudio {
   onEvent(e: SimEvent, listener: Vector3, foot: boolean) {
     if (e.t === 'fire') {
       if (e.owner === 0) {
-        if (e.weapon === 'rifle') {
+        if (e.weapon === 'rifle' || e.weapon === 'carbine') {
           if (this.sfx.has('rifle_shot')) this.sfx.clip('rifle_shot', { gain: 0.55, rate: 0.97 + this.rnd() * 0.06, length: 0.85 });
           else this.sfx.clip('gun_shot', { gain: 0.5, rate: 1.65 + this.rnd() * 0.1, length: 0.16, highpass: 400 });
+        } else if (e.weapon === 'at_rocket') {
+          this.sfx.clip('rocket_launch', { gain: 0.5, rate: 1.1, length: 0.5 });
         } else if (e.weapon === 'grenade') {
           if (this.sfx.has('grenade_launch')) this.sfx.clip('grenade_launch', { gain: 0.5, length: 0.44 });
           else this.sfx.clip('rocket_launch', { gain: 0.45, rate: 1.9, length: 0.25, lowpass: 3000 });
