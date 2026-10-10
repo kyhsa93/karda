@@ -240,14 +240,16 @@ export function BattleHud({ session, runtime, side, renderer, touch }: { session
         <div className="killfeed">{lines.map((l, i) => <div key={i} className={l.mine ? 'mine' : ''}>{l.text}</div>)}</div>
         {radio.current && radio.current.until > now && <div className="battle-radio">{radio.current.text}</div>}
         {world.avatar.kind === 'soldier' && world.soldier && (() => {
-          const s = world.soldier, a = world.soldierArms, m = a.ammo[a.selected]!, g = a.ammo.grenade, gear = world.soldierGear;
+          const s = world.soldier, a = world.soldierArms, m = a.ammo[a.selected]!, g = a.ammo.grenade ?? a.ammo.at_rocket, gear = world.soldierGear;
           const medkit = gear.medkit ? t('battle.hud.medkitActive', { n: Math.ceil(gear.medkit.until - world.time) }) : world.time < gear.readyAt ? t('battle.hud.medkitWait', { n: Math.ceil(gear.readyAt - world.time) }) : t('battle.hud.medkitReady');
           return (
             <div className="soldier-status">
               <b className={s.hp < 35 ? 'low' : ''}>{t('battle.hud.hp', { n: Math.ceil(s.hp) })}</b>
               <span>{t(`battle.hud.weapon.${a.selected}`)} {a.reloading > 0 ? t('battle.hud.reloading') : `${m.mag} / ${m.reserve}`}</span>
-              {g && a.selected !== 'grenade' && <span>{t('battle.hud.weapon.grenade')} {g.mag + g.reserve}</span>}
+              {g && a.selected !== 'grenade' && a.selected !== 'at_rocket' && <span>{t(`battle.hud.weapon.${a.ammo.grenade ? 'grenade' : 'at_rocket'}`)} {g.mag + g.reserve}</span>}
               {gear.medkitLeft > 0 && <span>{t('battle.hud.medkit', { state: medkit })}</span>}
+              {gear.repairable && <span>{t('battle.hud.repair', { state: gear.overheatUntil > world.time ? t('battle.hud.repairHot', { n: Math.ceil(gear.overheatUntil - world.time) }) : gear.repairing ? t('battle.hud.repairing') : t('battle.hud.medkitReady') })}</span>}
+              {(gear.mineLeft > 0 || gear.mines.length > 0) && <span>{t('battle.hud.mine', { n: gear.mineLeft })}</span>}
               {gear.smokeLeft > 0 && <span>{t('battle.hud.smoke', { n: gear.smokeLeft })}</span>}
               <span>{t(`battle.hud.stance.${s.stance}`)}</span>
             </div>

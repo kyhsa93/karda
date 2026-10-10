@@ -71,8 +71,24 @@ export function falloffDamage(w: WeaponDef, dist: number) {
   return w.damage + (f.min - w.damage) * k;
 }
 
-export function hitUnit(world: World, u: Unit, w: WeaponDef, byPlayer: boolean, dist = 0) {
-  const raw = falloffDamage(w, dist) * armorMultiplier(w.penetration, u.def.armor);
+export const SIDE_HIT = 1.2;
+export const REAR_HIT = 1.5;
+
+export function isGroundVehicle(u: Unit) {
+  return u.def.category === 'tracked' || u.def.category === 'vehicle';
+}
+
+export function aspectMultiplier(u: Unit, vel: Vector3) {
+  if (!isGroundVehicle(u)) return 1;
+  const len = Math.hypot(vel.x, vel.z);
+  if (len < 1e-6) return 1;
+  const along = (vel.x * -Math.sin(u.yaw) + vel.z * -Math.cos(u.yaw)) / len;
+  if (along > 0.5) return REAR_HIT;
+  return along >= -0.5 ? SIDE_HIT : 1;
+}
+
+export function hitUnit(world: World, u: Unit, w: WeaponDef, byPlayer: boolean, dist = 0, aspect = 1) {
+  const raw = falloffDamage(w, dist) * armorMultiplier(w.penetration, u.def.armor) * aspect;
   world.damageUnit(u, u.def.squad && w.squadScale ? raw / w.squadScale : raw, byPlayer);
 }
 

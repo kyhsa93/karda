@@ -14,7 +14,7 @@ import { createSoldier, createSoldierCommands, REGEN_DELAY, REGEN_RATE, SOLDIER_
 import { createMotion, setStance, sprinting, stepSoldier, type SoldierMotion } from './infantry/movement';
 import { createArms as createSoldierArms, select, startReload, stepArms, type InfantryWeaponId, type SoldierArms } from './infantry/arms';
 import { soldierEye } from './infantry/soldier';
-import { createGear, placeMedkit, stepGear, throwSmoke, type SoldierGear } from './infantry/gear';
+import { createGear, placeMedkit, placeMine, stepGear, throwSmoke, type SoldierGear } from './infantry/gear';
 import { toggleEngine } from './heli/systems';
 import { blastShares, DAMAGED, hitSystem, randomHitPoint, ROTOR_FAIL_SECONDS, systemAt, type SystemId } from './heli/damage';
 import type { CrashReason } from './events';
@@ -33,7 +33,7 @@ import { constrainTads, createTads, lookAngles, tadsDirection, tadsFovDeg, tadsL
 import { PAD_R, Terrain, type Pad3, type TerrainOptions } from './terrain';
 import { createAiState, hostile, UNIT_DEFS, type Side, type Unit } from './units';
 import { aimDirection, createArms, GUN_INTERVAL, gunInLimits, muzzlePosition, SALVOS, type Aim, type Arms, type WeaponId } from './weapons/arms';
-import { explode, explodeWeapon, falloffDamage, hitUnit, WEAPONS } from './weapons/damage';
+import { aspectMultiplier, explode, explodeWeapon, falloffDamage, hitUnit, WEAPONS } from './weapons/damage';
 import { integrate, PLAYER_OWNER, segmentHitsTerrain, segmentHitsUnit, type Projectile } from './weapons/projectile';
 import { gunAim } from './weapons/ballistics';
 import { hellfireSolution, launchHellfire, longbowSolution } from './weapons/hellfire';
@@ -163,7 +163,9 @@ export class World {
       this.soldierCommands.yaw = this.soldier.yaw;
       this.soldierMotion = createMotion();
       this.soldierArms = createSoldierArms(s.cls);
+      const carried = this.soldierGear.mines;
       this.soldierGear = createGear(s.cls);
+      this.soldierGear.mines = carried.filter(m => m.until > this.time);
       this.los.smokes = this.soldierGear.clouds;
       this.los.clear();
       this.commands.fire = false;
@@ -196,6 +198,10 @@ export class World {
 
   placeMedkit() {
     return !!this.soldier?.alive && placeMedkit(this.soldierGear, this.soldier, this.terrain, this.time);
+  }
+
+  placeMine() {
+    return !!this.soldier?.alive && placeMine(this.soldierGear, this.soldier, this.terrain);
   }
 
   throwSmoke() {
@@ -535,7 +541,7 @@ export class World {
     if (this.active && this.avatar.kind === 'soldier' && this.soldier?.alive) this.stepSoldier(this.soldier, dt);
     if (this.active) {
       const gear = this.soldierGear;
-      stepGear(gear, { now: this.time, dt, terrain: this.terrain, units: this.units, playerSide: this.playerSide, soldier: this.avatar.kind === 'soldier' ? this.soldier : null });
+      stepGear(gear, { now: this.time, dt, terrain: this.terrain, units: this.units, playerSide: this.playerSide, soldier: this.avatar.kind === 'soldier' ? this.soldier : null, repair: this.soldierCommands.repair, playerDead: this.avatar.kind === 'soldier' && !!this.soldier && !this.soldier.alive, world: this });
       if (gear.dirty) { gear.dirty = false; this.los.clear(); }
     }
     if (this.active && this.avatar.kind === 'heli' && h.alive) {
@@ -878,7 +884,7 @@ export class World {
         const byPlayer = p.owner === PLAYER_OWNER;
         if (at.distanceTo(p.origin) >= w.minRange) {
           if (bestMember) this.damageMember(bestUnit, bestMember.member, falloffDamage(w, at.distanceTo(p.origin)) * (bestMember.head ? HEADSHOT : 1) / (w.squadScale ?? 1), byPlayer);
-          else hitUnit(this, bestUnit, w, byPlayer, at.distanceTo(p.origin));
+          else hitUnit(this, bestUnit, w, byPlayer, at.distanceTo(p.origin), byPlayer ? aspectMultiplier(bestUnit, p.vel) : 1);
           explodeWeapon(this, at, w, byPlayer, bestUnit);
         }
         this.emit({ t: 'impact', weapon: p.weapon, pos: at, unit: bestUnit.id, ground: false });

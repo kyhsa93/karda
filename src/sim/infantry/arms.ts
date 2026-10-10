@@ -4,7 +4,7 @@ import { PLAYER_OWNER, type Projectile } from '../weapons/projectile';
 import { WEAPONS } from '../weapons/damage';
 import type { SoldierClass, SoldierState } from './soldier';
 
-export type InfantryWeaponId = 'rifle' | 'grenade';
+export type InfantryWeaponId = 'rifle' | 'carbine' | 'grenade' | 'at_rocket';
 
 export interface InfantryWeaponDef {
   projectile: string; mag: number; reserve: number; rate: number; reload: number;
@@ -13,7 +13,7 @@ export interface InfantryWeaponDef {
 }
 
 export const INFANTRY_WEAPONS = classesJson.weapons as Record<InfantryWeaponId, InfantryWeaponDef>;
-export type ToolId = 'medkit' | 'smoke';
+export type ToolId = 'medkit' | 'smoke' | 'repair' | 'mine';
 export interface ClassKit { primary: InfantryWeaponId; gear: InfantryWeaponId[]; tools: ToolId[]; gearSlots: number; pending: string[] }
 export const CLASS_KITS = classesJson.classes as unknown as Record<SoldierClass, ClassKit>;
 export const CLASS_IDS = Object.keys(CLASS_KITS) as SoldierClass[];

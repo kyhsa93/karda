@@ -3,18 +3,26 @@ import classesJson from '../../content/battle/classes.json';
 import type { Terrain } from '../terrain';
 import type { Side, Unit } from '../units';
 import { aimDir, CLASS_KITS } from './arms';
+import { distanceToUnit, hitUnit, isGroundVehicle, WEAPONS } from '../weapons/damage';
+import type { World } from '../world';
 import type { SoldierClass, SoldierState } from './soldier';
 import { SOLDIER_HP } from './soldier';
 
 export interface MedkitDef { count: number; radius: number; healPerSec: number; returnEvery: number; returnHp: number; duration: number; redeployCooldown: number; placeDistance: number }
 export interface SmokeDef { count: number; radius: number; duration: number; throwSpeed: number; throwLift: number; center: number; flightMax: number }
 
+export interface RepairDef { healPerSec: number; maxUse: number; overheat: number; cool: number; range: number }
+export interface MineDef { count: number; placeDistance: number; triggerRadius: number; afterDeath: number }
+
+export const REPAIR = classesJson.tools.repair as RepairDef;
+export const MINE = classesJson.tools.mine as MineDef;
 export const MEDKIT = classesJson.tools.medkit as MedkitDef;
 export const SMOKE = classesJson.tools.smoke as SmokeDef;
 export const THROW_GRAVITY = 9.81;
 
 export interface Medkit { pos: Vector3; until: number; timers: Map<number, number> }
 export interface Canister { pos: Vector3; vel: Vector3; age: number }
+export interface Mine { pos: Vector3; until: number }
 export interface SmokeCloud { x: number; y: number; z: number; r: number; until: number }
 
 export interface SoldierGear {
@@ -25,6 +33,12 @@ export interface SoldierGear {
   canisters: Canister[];
   clouds: SmokeCloud[];
   dirty: boolean;
+  repairable: boolean;
+  repairHeat: number;
+  overheatUntil: number;
+  repairing: boolean;
+  mineLeft: number;
+  mines: Mine[];
 }
 
 export function createGear(cls: SoldierClass): SoldierGear {
@@ -32,6 +46,8 @@ export function createGear(cls: SoldierClass): SoldierGear {
   return {
     medkit: null, medkitLeft: tools.includes('medkit') ? MEDKIT.count : 0, readyAt: 0,
     smokeLeft: tools.includes('smoke') ? SMOKE.count : 0, canisters: [], clouds: [], dirty: false,
+    repairable: tools.includes('repair'), repairHeat: 0, overheatUntil: 0, repairing: false,
+    mineLeft: tools.includes('mine') ? MINE.count : 0, mines: [],
   };
 }
 
@@ -39,6 +55,14 @@ export function placeMedkit(g: SoldierGear, s: SoldierState, terrain: Terrain, n
   if (g.medkit || g.medkitLeft <= 0 || now < g.readyAt || !s.alive) return false;
   const x = s.pos.x - Math.sin(s.yaw) * MEDKIT.placeDistance, z = s.pos.z - Math.cos(s.yaw) * MEDKIT.placeDistance;
   g.medkit = { pos: new Vector3(x, terrain.surfaceAt(x, z), z), until: now + MEDKIT.duration, timers: new Map() };
+  return true;
+}
+
+export function placeMine(g: SoldierGear, s: SoldierState, terrain: Terrain) {
+  if (g.mineLeft <= 0 || !s.alive) return false;
+  g.mineLeft--;
+  const x = s.pos.x - Math.sin(s.yaw) * MINE.placeDistance, z = s.pos.z - Math.cos(s.yaw) * MINE.placeDistance;
+  g.mines.push({ pos: new Vector3(x, terrain.surfaceAt(x, z), z), until: Infinity });
   return true;
 }
 
@@ -57,6 +81,9 @@ export interface GearContext {
   units: readonly Unit[];
   playerSide: Side;
   soldier: SoldierState | null;
+  repair: boolean;
+  playerDead: boolean;
+  world: World;
 }
 
 export function smokeBlocks(clouds: readonly SmokeCloud[], a: Vector3, b: Vector3) {
@@ -79,7 +106,40 @@ function reviveOne(u: Unit) {
   return true;
 }
 
+function stepRepair(g: SoldierGear, c: GearContext) {
+  const s = c.soldier;
+  const using = g.repairable && c.repair && !!s?.alive && c.now >= g.overheatUntil;
+  g.repairing = false;
+  if (!using) { g.repairHeat = Math.max(0, g.repairHeat - REPAIR.cool * c.dt); return; }
+  let best: Unit | null = null, bestD = REPAIR.range;
+  for (const u of c.units) {
+    if (!u.alive || u.side !== c.playerSide || !isGroundVehicle(u) || u.def.indestructible || u.hp >= u.def.hp) continue;
+    const d = distanceToUnit(u, s!.pos);
+    if (d <= bestD) { best = u; bestD = d; }
+  }
+  if (!best) { g.repairHeat = Math.max(0, g.repairHeat - REPAIR.cool * c.dt); return; }
+  best.hp = Math.min(best.def.hp, best.hp + REPAIR.healPerSec * c.dt);
+  g.repairing = true;
+  g.repairHeat += c.dt;
+  if (g.repairHeat >= REPAIR.maxUse) { g.repairHeat = 0; g.overheatUntil = c.now + REPAIR.overheat; g.repairing = false; }
+}
+
+function stepMines(g: SoldierGear, c: GearContext) {
+  for (let i = g.mines.length - 1; i >= 0; i--) {
+    const m = g.mines[i];
+    if (c.playerDead && m.until === Infinity) m.until = c.now + MINE.afterDeath;
+    if (m.until <= c.now) { g.mines.splice(i, 1); continue; }
+    const foe = c.units.find(u => u.alive && u.side !== c.playerSide && u.side !== 'civilian' && isGroundVehicle(u) && Math.hypot(u.pos.x - m.pos.x, u.pos.z - m.pos.z) <= MINE.triggerRadius + Math.max(u.def.size[0], u.def.size[2]) / 2);
+    if (!foe) continue;
+    g.mines.splice(i, 1);
+    c.world.emit({ t: 'explosion', pos: m.pos.clone(), size: 4 });
+    hitUnit(c.world, foe, WEAPONS.at_mine, true);
+  }
+}
+
 export function stepGear(g: SoldierGear, c: GearContext) {
+  stepRepair(g, c);
+  stepMines(g, c);
   for (let i = g.canisters.length - 1; i >= 0; i--) {
     const k = g.canisters[i];
     k.age += c.dt;

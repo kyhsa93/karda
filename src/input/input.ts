@@ -46,6 +46,7 @@ export class FlightInput {
 
   mouseFire = false;
   touchAds = false;
+  touchRepair = false;
   aimAssist = true;
   assistActive = false;
   private assistNear = false;
@@ -145,6 +146,7 @@ export class FlightInput {
     c.sprint = this.heldKeys(k.sprint) || padSprint || Math.hypot(this.touch.lx, this.touch.ly) > 0.95;
     c.jump = this.heldKeys(k.jump) || padJump;
     c.fire = this.mouseFire || this.touchFire || padFire;
+    c.repair = this.heldKeys(k.repair) || this.touchRepair;
     c.ads = this.mouseAds || this.touchAds || padAds;
     this.assist(world, dt, !!gp || this.touchUsed);
     c.yaw = this.soldierYaw;

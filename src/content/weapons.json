@@ -24,6 +24,19 @@
     "damage": 25, "splashRadius": 0, "splashDamage": 0, "penetration": 0, "squadScale": 12.5,
     "falloff": { "near": 50, "far": 300, "min": 18 }
   },
+  "carbine": {
+    "guidance": "ballistic", "minRange": 0, "maxRange": 600, "speed": 800, "drag": 0.0006,
+    "damage": 22, "splashRadius": 0, "splashDamage": 0, "penetration": 0, "squadScale": 12.5,
+    "falloff": { "near": 50, "far": 300, "min": 14 }
+  },
+  "at_rocket": {
+    "guidance": "ballistic", "minRange": 0, "maxRange": 600, "speed": 150, "drag": 0,
+    "damage": 120, "splashRadius": 3, "splashDamage": 100, "penetration": 4, "squadScale": 12.5
+  },
+  "at_mine": {
+    "guidance": "none", "minRange": 0, "maxRange": 0, "speed": 0,
+    "damage": 200, "splashRadius": 0, "splashDamage": 0, "penetration": 5
+  },
   "grenade": {
     "guidance": "ballistic", "minRange": 10, "maxRange": 350, "speed": 75, "drag": 0,
     "damage": 100, "splashRadius": 5, "splashDamage": 100, "penetration": 2, "squadScale": 12.5
