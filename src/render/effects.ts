@@ -195,7 +195,7 @@ export class Effects {
           for (let i = 0; i < 5; i++) this.smoke.spawn(e.pos.clone().add(this.jitter(1.5)), e.dir.clone().multiplyScalar(-8).add(this.jitter(3)), 2.5, 2, 7, 0.55, CELL.dust[i % 4], 0.5, 1.2);
           break;
         }
-        if (e.weapon === 'hydra70') {
+        if (e.weapon === 'hydra70' || e.weapon === 'at_rocket') {
           this.glow.spawn(e.pos, new THREE.Vector3(), 0.12, 2.5, 3.5, 1, CELL.flash);
           for (let i = 0; i < 3; i++) this.smoke.spawn(e.pos.clone().add(this.jitter(1)), e.dir.clone().multiplyScalar(-6).add(this.jitter(2)), 1.8, 1.5, 5, 0.5, CELL.smoke[i], 0.6, 1.5);
           break;
@@ -251,6 +251,7 @@ export class Effects {
         const fade = Math.min(1, (c.until - world.time) / 4);
         for (let i = 0; i < 3; i++) this.smoke.spawn(new THREE.Vector3(c.x, c.y + 1, c.z).add(this.jitter(c.r * 1.2)), this.jitter(0.6), 5, c.r * 0.5, c.r * 0.7, 0.55 * fade, CELL.dust[(this.rnd() * 4) | 0], 0.1, 0.2);
       }
+      for (const m of gear.mines) this.glow.spawn(m.pos.clone().setY(m.pos.y + 0.15), new THREE.Vector3(), 0.25, 0.4, 0.25, 0.8, CELL.flash);
       if (gear.medkit) this.glow.spawn(gear.medkit.pos.clone().setY(gear.medkit.pos.y + 0.6), new THREE.Vector3(0, 0.6, 0), 0.9, 0.5, 0.3, 0.7, CELL.flash);
     }
     for (const p of world.projectiles) {

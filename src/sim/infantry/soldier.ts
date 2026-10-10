@@ -16,6 +16,7 @@ export interface SoldierCommands {
   sprint: boolean;
   jump: boolean;
   fire: boolean;
+  repair: boolean;
   ads: boolean;
   yaw: number;
   pitch: number;
@@ -38,7 +39,7 @@ export function createSoldier(pos: Vector3, yaw: number, cls: SoldierClass = 'as
 }
 
 export function createSoldierCommands(): SoldierCommands {
-  return { forward: 0, right: 0, sprint: false, jump: false, fire: false, ads: false, yaw: 0, pitch: 0 };
+  return { forward: 0, right: 0, sprint: false, jump: false, fire: false, repair: false, ads: false, yaw: 0, pitch: 0 };
 }
 
 export function soldierEye(s: SoldierState, out = new Vector3()) {

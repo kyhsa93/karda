@@ -9,6 +9,7 @@ export const SOLDIER_COMMANDS: Readonly<Record<string, Command>> = {
   KeyR: 'reload',
   KeyX: 'medkit',
   KeyF: 'smoke',
+  KeyB: 'mine',
   Digit1: 'weapon1',
   Digit2: 'weapon2',
   Digit3: 'weapon3',
@@ -30,6 +31,7 @@ export const SOLDIER_KEYS = {
   right: ['KeyD', 'ArrowRight'],
   sprint: ['ShiftLeft', 'ShiftRight'],
   jump: ['Space'],
+  repair: ['KeyT'],
 } as const;
 
 export const ROLE_COMMANDS: Record<Role, Readonly<Record<string, Command>>> = {

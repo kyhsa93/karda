@@ -91,6 +91,9 @@
     "moveStick": "이동",
     "toGrenade": "유탄",
     "toRifle": "소총",
+    "toRocket": "로켓",
+    "repair": "수리",
+    "mine": "지뢰",
     "medkit": "구급 상자",
     "smoke": "연막",
     "reload": "재장전",
@@ -488,10 +491,16 @@
       "medkitActive": "{n}초",
       "medkitWait": "재배치 {n}초",
       "smoke": "연막탄 {n}",
+      "repair": "수리 도구 {state}",
+      "repairing": "수리 중",
+      "repairHot": "과열 {n}초",
+      "mine": "지뢰 {n}",
       "reloading": "재장전 중",
       "weapon": {
         "rifle": "소총",
-        "grenade": "유탄"
+        "grenade": "유탄",
+        "carbine": "카빈",
+        "at_rocket": "대전차 로켓"
       },
       "stance": {
         "stand": "서기",
