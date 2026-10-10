@@ -186,6 +186,26 @@ PWA가 아무것도 캐시하지 않으므로(`sw.js` no-store) 매 실행이 �
 - **실패는 사실상 배제**된다(구간 위 끝 29–31pp > 20pp, 점추정도 선 위). **통과**는 하한이 20pp를 넘어야 하는데, 참값이 22~24pp라면 반폭이 연합 약 ±4pp(약 1,200시드), VPA 약 ±2pp(약 3,600시드)가 되어야 한다. 한 진영 약 1시간(400시드 35분 기준 3,600시드는 5시간 이상)이고 참값이 선 가까이 있으면 더 늘 수 있다. 시드를 더 늘려 얻는 것은 '선 위 몇 pp'인지의 숫자이지 설계 판단이 아니다.
 - 결론: P0 띠(role − idle ≥ 20pp)에서 공격 헬기는 **판정 불가**, 방향은 통과 쪽이다. 억지로 통과로 적지 않는다. 띠 폭(20pp)을 기술 임원이 어떻게 볼지(시드 증량 vs 점추정 기준 판정 vs 띠 재검토)는 technical-director에게 넘긴다.
 
+### 공격 헬기 P0 판정 재측정: 1,200시드 짝 비교 (#198, 2026-10-10)
+
+400시드 표(위)의 다음 단계다. 같은 명령에 시드만 1,200으로 늘렸다(`npm run battle:roles -- --roles idle,proxy --seeds 1200 --paired --jobs 7`, harek quick, 4800 matches in 6302 s on 7 processes, main b94a658 기준). 아래 표는 측정 로그 원문 표를 그대로 옮긴 것이다.
+
+| side | role | wins | 95% interval | − idle | verdict | entered a point | firstEntrySec | firstContactSec | flips in last 3 min | kills / deaths | seeds to verdict: independent / paired |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| coalition | idle | 474/1200 (40%) | 37%–42% |  | — |  |  |  | 1.31 |  |  |
+| coalition | proxy | 740/1200 (62%) | 59%–64% | 22pp | **undecided** — beats idle by 18-26pp — more seeds |  |  |  | 1.03 | 2.1 / 1.6 | undecided (±4pp) / undecided (±4pp) |
+| coalition | (spread) | | | | **undecided** — one judged role | | | | | | |
+| veros | idle | 624/1200 (52%) | 49%–55% |  | — |  |  |  | 1.50 |  |  |
+| veros | proxy | 879/1200 (73%) | 71%–76% | 21pp | **undecided** — beats idle by 18-25pp — more seeds |  |  |  | 1.17 | 2.6 / 1.6 | undecided (±4pp) / undecided (±4pp) |
+| veros | (spread) | | | | **undecided** — one judged role | | | | | | |
+
+(표의 coalition = 연합, veros = VPA.)
+
+- **400시드 기록과의 관계.** 400시드는 연합 24pp(18–31), VPA 22pp(16–29)였고 1,200시드는 연합 22pp(18–26), VPA 21pp(18–25)다. 점추정은 2pp·1pp 내려와 통과선(20pp)에 더 가까워졌고, 구간 반폭은 ±6~7pp에서 ±4pp로 좁아졌다. 400시드 기록이 예상한 '1,200시드에서 반폭 약 ±4pp'와 맞는다. 다만 하한(18pp)이 여전히 20pp보다 낮아 **구간이 선에 걸린 상태는 그대로**다. 400시드 때 방향이 통과 쪽이라고 적었는데, 점추정이 선 위(22/21pp)에 있다는 점은 같지만 선에서의 여유는 줄었다. 두 측정의 시드 집합이 겹치는지는 이 기록에서 확인하지 않았으므로 독립된 두 번째 증거로 읽지 않는다.
+- 400시드 기록의 추정(VPA는 약 ±2pp, 약 3,600시드가 필요)은 이번에 해소되지 않았다. VPA 반폭은 아직 ±4pp이고, 로그의 'seeds to verdict'도 독립·짝 모두 undecided(±4pp)다. 짝 비교가 독립 표본보다 반폭을 줄이지 못하는 점은 400시드 때와 같다(독립/짝 모두 ±4pp).
+- 실패 쪽은 구간 상한(26pp/25pp)이 20pp보다 위라 여전히 배제되는 방향이다. 통과는 하한이 20pp를 넘어야 하므로 아직 말할 수 없다.
+- **판정: 판정 불가 유지 — game-director 결정 대기.** 판정 범주(시드 증량, 점추정 기준, 띠 재검토)는 game-director가 정하는 중이므로 이 기록은 통과·실패로 적지 않는다.
+
 ### 실력 단계 L0~L3 · 표시용 RNG 분리 (#199)
 
 - **RNG 분리.** `World`에 스트림이 셋이다: `rng`(봇끼리의 전투·배치), `fxRng`(표시용: 빗나간 탄의 예광 방향), `playerRng`(플레이어 쪽: 보병 소총 산포·반동, 봇이 플레이어를 쏠 때의 명중 굴림·피격 부위, 레이더 포착·플레어·채프 굴림, 헬파이어 LOAL 오차, 대리 조준 흔들림). 시드에서 섞어(`streamSeed`) 만든다. 이전에는 플레이어가 쏘거나 가까이 있기만 해도(`seen` = 플레이어 2000m 안) 봇 전투의 `world.rng` 소비가 달라졌다. 테스트(`pairing.test.ts`): 플레이어가 쏴도 `world.rng`가 안 움직이고, 플레이어 위치가 달라도 봇 전투 로그가 같다(분리 전에는 둘 다 실패).
