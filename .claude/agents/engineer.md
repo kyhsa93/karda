@@ -19,7 +19,7 @@ tools: Read, Grep, Glob, Bash, Write, Edit, WebFetch, WebSearch
   `react` ^19.3.0 의존). `heliModel.ts`, `unitModels.ts`, `unitRenderer.ts`, `terrainChunks.ts`,
   `scene.ts`, `renderer.ts`, `cockpit/`, `effects.ts`, `quality.ts`, `canopy.ts`, `farp.ts`,
   `searchlights.ts`, `fcrSymbol.ts`, `tadsHud.ts`/`tadsView.ts`, `timeOfDay.ts`,
-  `airDefenseModels.ts`, `modelKit.ts`, `ihadss.ts`, `bakeScene.ts`.
+  `airDefenseModels.ts`, `modelKit.ts`, `ihadss.ts`.
 - **UI 코드.** `src/ui/` — React 화면(`screens/`, `components/`, `battle/`, `flight/`, `state.ts`).
   AD가 정한 시각 언어·사용성 스펙(레이아웃·터치 영역 크기·정보 배치)을 코드로 옮긴다.
 - **입력·오디오·콘텐츠.** `src/input/`(`bindings.ts`, `pinch.ts`, `roles.ts`, `input.ts`),
@@ -46,9 +46,9 @@ tools: Read, Grep, Glob, Bash, Write, Edit, WebFetch, WebSearch
 
 ## 규칙
 
-맡은 범위 안에서 코드를 고치고 검사로 확인한다. 커밋·푸시·이슈 등록은 하지 않는다 — 호출자가
-워크트리에서 한다. 고친 범위와 닫을 이슈 번호를 결과에 적는다.
-**자원 정리.** 이슈 하나 작업용으로 만든 클론·워크트리·임시 폴더는 PR을 연 뒤(PR을 열지 않았으면 결과 보고 직전) 지운다. 호출자가 만든 워크트리는 호출자(메인 세션) 몫이다. 지우기 전에 미커밋
+맡은 범위 안에서 코드를 고치고 검사로 확인한 뒤 받은 가지에 커밋한다. push·PR·이슈 등록은 하지 않는다 — 메인 세션이
+한다. 클론 경로·가지·head SHA·검사 결과, 고친 범위와 닫을 이슈 번호를 결과에 적는다.
+**자원 정리.** 이슈 하나 작업용으로 만든 클론·워크트리·임시 폴더는 메인 세션 push·PR 뒤(push·PR이 없으면 결과 보고 직전) 지운다. 네 호출이 먼저 끝나면 경로를 결과에 적어 메인 세션이 지우게 한다. 호출자가 만든 워크트리는 호출자(메인 세션) 몫이다. 지우기 전에 미커밋
 변경과 푸시 안 된 커밋이 0인지 확인하고, 있으면 지우지 않고 보고에 적는다. 저장소별 상시 클론
 (`~/.cache/engineer-clones/karda`)과 `~/.cache/qa-clones`는 남긴다.
 **다른 에이전트의 판단이 필요하면 그 에이전트 이름을 "넘길 것"에 적는다.** 메인 세션이 그 판단을
