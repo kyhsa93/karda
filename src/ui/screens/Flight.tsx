@@ -11,6 +11,7 @@ import { LAND_DESCENT } from '../../sim/heli/airframe';
 import { airspeed } from '../../sim/heli/state';
 import type { FlightSession } from '../../sim/session';
 import { farpUnder } from '../../sim/farp';
+import { useRaiseInRender } from '../battle/BattleLoadBoundary';
 import { FarpMenu } from '../flight/FarpMenu';
 import { DIFFICULTIES } from '../../sim/difficulty';
 import { freshSave, type Settings } from '../../save/save';
@@ -53,6 +54,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   sim.assists.autoCountermeasures = settings.assists.autoCountermeasures;
   const logRef = useRef(new MessageLog());
   const rendererRef = useRef<FlightRenderer | null>(null);
+  const raise = useRaiseInRender();
   const [input] = useState(() => new FlightInput());
   const audioRef = useRef<GameAudio | null>(null);
   useEffect(() => {
@@ -179,6 +181,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       overlay: ihadssRef.current!,
       session,
       input,
+      onCrash: raise,
       onFrame: ({ simDt, cockpit, agl }) => {
         if (paceRef.current) paceRef.current.textContent = paceLabel(rendererRef.current?.paceRatio ?? null);
         const h = sim.player, tp = sim.target;

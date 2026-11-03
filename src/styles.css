@@ -14,6 +14,7 @@ body {
 .card { max-width: 440px; width: 100%; margin: auto 0; }
 h1 { margin: 0 0 6px; font-size: 36px; letter-spacing: .02em; }
 .sub { margin: 0 0 18px; color: #aebbd0; font-size: 15px; line-height: 1.5; }
+[role="alert"] .sub { word-break: keep-all; }
 .keys {
   display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; text-align: left;
   font-size: 14px; margin: 0 auto 16px; max-width: 340px;
