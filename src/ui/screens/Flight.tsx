@@ -22,7 +22,7 @@ import { rocketSolution } from '../../sim/weapons/rockets';
 import { CLASS_KITS } from '../../sim/infantry/arms';
 import { PREVENT_DEFAULT, type Command } from '../../input/bindings';
 import { roleCommand, roleOf, wantsPointerLock } from '../../input/roles';
-import { FlightInput } from '../../input/input';
+import { FlightInput, releaseMouseOnFocusLoss } from '../../input/input';
 import { SettingsPanel } from './SettingsScreen';
 import { crashText, eventMessage, MessageLog } from '../flight/messages';
 import { VirtualStick } from '../components/VirtualStick';
@@ -263,6 +263,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       window.removeEventListener('blur', blur);
     };
   });
+
+  useEffect(() => releaseMouseOnFocusLoss(input, window, document, () => mountRef.current), [input]);
 
   const drag = useRef<{ id: number; x: number; y: number; sx: number; sy: number } | null>(null);
   const pinch = useRef(new Pinch());
