@@ -470,6 +470,7 @@ export class FlightRenderer {
     this.scene.dispose();
     this.instruments.dispose();
     this.renderer.dispose();
+    if (!this.renderer.getContext().isContextLost()) this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
   }
 }
