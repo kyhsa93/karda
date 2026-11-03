@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { World } from '../sim/world';
 import { commandForKey, FLIGHT_KEYS, GAMEPAD_BUTTONS, KEY_COMMANDS, PAD_HEAD_LOOK } from './bindings';
 import { Pinch } from './pinch';
-import { FlightInput } from './input';
+import { FlightInput, releaseMouseOnFocusLoss } from './input';
 
 describe('key bindings (07-ui-ux.md 7.6)', () => {
   it.each([
@@ -175,5 +175,55 @@ describe('soldier aim assist and gamepad (B2-11)', () => {
     buttons[2].pressed = true;
     input.update(w, 0.1);
     expect(cmds).toContain('reload');
+  });
+});
+
+describe('mouse release on focus loss (#267)', () => {
+  function setup() {
+    const world = new World({ seed: 3 });
+    world.active = true;
+    world.spawnAvatar({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls: 'assault' });
+    const input = new FlightInput();
+    input.gamepads = () => [];
+    const win = new EventTarget();
+    const doc = Object.assign(new EventTarget(), { pointerLockElement: null as Element | null });
+    const mount = {} as Element;
+    releaseMouseOnFocusLoss(input, win, doc, () => mount);
+    input.mouseFire = true;
+    input.mouseAds = true;
+    input.update(world, 0.1);
+    expect(world.soldierCommands).toMatchObject({ fire: true, ads: true });
+    return { world, input, win, doc, mount };
+  }
+
+  it('stops on-foot fire and ADS when the window loses focus', () => {
+    const { world, input, win } = setup();
+    win.dispatchEvent(new Event('blur'));
+    input.update(world, 0.1);
+    expect(world.soldierCommands).toMatchObject({ fire: false, ads: false });
+  });
+
+  it('stops on-foot fire and ADS when the pointer lock is released', () => {
+    const { world, input, doc } = setup();
+    doc.pointerLockElement = null;
+    doc.dispatchEvent(new Event('pointerlockchange'));
+    input.update(world, 0.1);
+    expect(world.soldierCommands).toMatchObject({ fire: false, ads: false });
+  });
+
+  it('stops on-foot fire and ADS when the pointer is locked to another element', () => {
+    const { world, input, doc } = setup();
+    doc.pointerLockElement = {} as Element;
+    doc.dispatchEvent(new Event('pointerlockchange'));
+    input.update(world, 0.1);
+    expect(world.soldierCommands).toMatchObject({ fire: false, ads: false });
+  });
+
+  it('keeps fire and ADS while the pointer stays locked to the game view', () => {
+    const { world, input, doc, mount } = setup();
+    doc.pointerLockElement = mount;
+    doc.dispatchEvent(new Event('pointerlockchange'));
+    input.update(world, 0.1);
+    expect(world.soldierCommands).toMatchObject({ fire: true, ads: true });
   });
 });
