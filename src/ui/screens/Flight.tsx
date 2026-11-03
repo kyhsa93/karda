@@ -5,6 +5,7 @@ import { GameAudio } from '../../audio/game';
 import { t, tList, tPairs } from '../../content/strings';
 import { clamp } from '../../core/math';
 import { M_TO_FT, MS_TO_FPM, MS_TO_KT } from '../../core/units';
+import { paceLabel } from '../../render/frameClock';
 import { FlightRenderer } from '../../render/renderer';
 import { LAND_DESCENT } from '../../sim/heli/airframe';
 import { airspeed } from '../../sim/heli/state';
@@ -70,6 +71,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const hudOnRef = useRef(true);
   hudOnRef.current = hud;
   const ihadssRef = useRef<HTMLCanvasElement>(null);
+  const paceRef = useRef<HTMLDivElement>(null);
+  const [measurePace] = useState(() => new URLSearchParams(location.search).has('fps'));
   const [help, setHelp] = useState(false);
   const [muted, setMuted] = useState(false);
   const voiceOn = settings.voiceWarnings;
@@ -177,6 +180,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       session,
       input,
       onFrame: ({ simDt, cockpit, agl }) => {
+        if (paceRef.current) paceRef.current.textContent = paceLabel(rendererRef.current?.paceRatio ?? null);
         const h = sim.player, tp = sim.target;
         if (sim.avatar.kind === 'heli' && !heliSoundsRef.current) {
           heliSoundsRef.current = true;
@@ -223,7 +227,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
     rendererRef.current = r;
     onRendererRef.current?.(r);
     r.applySettings(settingsRef.current);
-    if (new URLSearchParams(location.search).has('fps')) { r.showFps = true; r.logStats = true; }
+    if (measurePace) { r.showFps = true; r.logStats = true; r.measurePace(); }
     input.onCommand = cmd => runCommandRef.current(cmd);
     if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __flight: { session, world: sim, input, renderer: r, model: r.model, weapons: { rocketSolution, sightPoint, hellfireSolution } } });
     return () => {
@@ -323,6 +327,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
         onWheel={e => { if (sim.tads.active) zoomTads(sim.tads, e.deltaY < 0 ? 1 : -1); }}
       />
       <canvas className="ihadss" ref={ihadssRef} />
+      {measurePace && <div className="pace" ref={paceRef} />}
       {(snap.mode === 'play' || snap.mode === 'crashed') && (
         <div className="hud3d">
           <div className="mission" ref={missionRef} />

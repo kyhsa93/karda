@@ -7,7 +7,7 @@ import { drawCanopyCracks } from './canopy';
 import { agl as aglOf, airspeed } from '../sim/heli/state';
 import type { FlightSession } from '../sim/session';
 import { STEP } from '../sim/world';
-import { drainSteps, frameDt } from './frameClock';
+import { drainSteps, frameDt, PaceMeter } from './frameClock';
 import type { FlightInput } from '../input/input';
 import { Instruments } from './cockpit/instruments';
 import { applyLoadout, buildHeli, type HeliModel } from './heliModel';
@@ -104,6 +104,7 @@ export class FlightRenderer {
   showFps = false;
   logStats = false;
   private statsAt = 0;
+  private pace: PaceMeter | null = null;
   private fps = { frames: 0, since: 0, value: 0, calls: 0, triangles: 0 };
   private mpdVideoAt = -Infinity;
   private raycaster = new THREE.Raycaster();
@@ -180,6 +181,9 @@ export class FlightRenderer {
   get drawCalls() { return this.fps.calls; }
   get triangles() { return this.fps.triangles; }
   get fpsValue() { return this.fps.value; }
+  get paceRatio() { return this.pace?.ratio ?? null; }
+
+  measurePace() { this.pace = new PaceMeter(); }
 
   toggleView() {
     this.view = this.view === 'cockpit' ? 'chase' : 'cockpit';
@@ -209,6 +213,7 @@ export class FlightRenderer {
     const { steps, acc } = drainSteps(this.acc + dt);
     this.acc = acc;
     for (let i = 0; i < steps; i++) session.step(STEP);
+    this.pace?.record(now, steps);
     const h = world.player, c = world.controls, model = this.model, scn = this.scene, camera = this.camera;
 
     model.root.position.copy(h.pos);
