@@ -26,6 +26,8 @@ export function clock(sec: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+const nextPaint = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+
 export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, tips, onTip }: {
   choice: BattleChoice; touch: boolean; settings: Settings; onSettings: (s: Settings) => void; onSetup: () => void; onTitle: () => void; tips: readonly string[]; onTip: (id: string) => void;
 }) {
@@ -38,6 +40,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
     void (async () => {
       const mod = await loadBattle();
       const map = await mod.loadMap('harek');
+      if (round > 0) await nextPaint();
       if (!alive) return;
       const { session, runtime } = mod.createBattleSession(map, 'quick', { side: choice.side, seed: (Date.now() & 0xffff) + round });
       session.world.difficulty = DIFFICULTIES[settings.difficulty];
@@ -52,7 +55,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
     <BattleLoadBoundary strings="battle.matchError">
       <Flight key={round} session={game.session} touch={touch} settings={settings} onSettings={onSettings} onExit={onSetup} onRenderer={setRenderer}>
         <BattleHud session={game.session} runtime={game.runtime} side={choice.side} renderer={renderer} touch={touch} />
-        <BattleOverlays game={game} side={choice.side} touch={touch} tips={tips} onTip={onTip} onAgain={() => setRound(r => r + 1)} onSetup={onSetup} onTitle={onTitle} />
+        <BattleOverlays game={game} side={choice.side} touch={touch} tips={tips} onTip={onTip} onAgain={() => { setGame(null); setRound(r => r + 1); }} onSetup={onSetup} onTitle={onTitle} />
       </Flight>
     </BattleLoadBoundary>
   );
