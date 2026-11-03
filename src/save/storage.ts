@@ -4,6 +4,10 @@ export function browserStorage(): KeyValue | null {
   try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch { return null; }
 }
 
+export function tabStorage(): KeyValue | null {
+  try { return typeof sessionStorage !== 'undefined' ? sessionStorage : null; } catch { return null; }
+}
+
 export function read(store: KeyValue | null, key: string): string | null {
   try { return store?.getItem(key) ?? null; } catch { return null; }
 }
