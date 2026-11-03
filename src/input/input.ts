@@ -195,4 +195,25 @@ export class FlightInput {
   }
 
   centerView() { this.headYaw = 0; this.headPitch = -0.1; }
+
+  releaseMouse() { this.mouseFire = false; this.mouseAds = false; }
+}
+
+export function releaseMouseOnFocusLoss(
+  input: FlightInput,
+  win: EventTarget,
+  doc: EventTarget & Pick<Document, 'pointerLockElement'>,
+  mount: () => Element | null,
+): () => void {
+  const blur = () => input.releaseMouse();
+  const unlock = () => {
+    const locked = doc.pointerLockElement;
+    if (!locked || locked !== mount()) input.releaseMouse();
+  };
+  win.addEventListener('blur', blur);
+  doc.addEventListener('pointerlockchange', unlock);
+  return () => {
+    win.removeEventListener('blur', blur);
+    doc.removeEventListener('pointerlockchange', unlock);
+  };
 }
