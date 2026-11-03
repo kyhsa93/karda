@@ -288,6 +288,128 @@ describe('battle failure during the match (#264)', () => {
   }, 90_000);
 });
 
+describe('play again (#265)', () => {
+  const NOW = 1700000000000;
+  const AGAIN = t('battle.report.again');
+  const LOADING = t('battle.deploy.loading');
+  const GO = t('battle.deploy.go');
+  type FakeSession = { mode: string; step(dt: number): void; objective: { conquest: { tickets: { veros: number } } } };
+  type FakeRenderer = { opts: { session: FakeSession }; dispose: ReturnType<typeof vi.fn> };
+  let root: Root;
+  let dom: ReturnType<typeof fakeDom>;
+  let renderers: FakeRenderer[];
+  let seeds: number[];
+  let hold: Promise<void> | null;
+  let frames: (() => void)[] | null;
+
+  const shown = () => dom.container.textContent;
+  const finishMatch = async () => {
+    const session = renderers.at(-1)!.opts.session;
+    await vi.waitFor(() => expect(shown()).toContain(GO));
+    press(buttons(dom.container).find(b => b.textContent.includes(GO))!);
+    session.objective.conquest.tickets.veros = 0;
+    for (let i = 0; i < 2400 && session.mode !== 'done'; i++) session.step(1 / 120);
+    await vi.waitFor(() => expect(shown()).toContain(AGAIN));
+  };
+  const pressAgain = () => press(buttons(dom.container).find(b => b.textContent === AGAIN)!);
+
+  beforeEach(async () => {
+    vi.resetModules();
+    dom = fakeDom('#/battle/harek/quick');
+    renderers = [];
+    seeds = [];
+    hold = null;
+    frames = null;
+    vi.spyOn(Date, 'now').mockReturnValue(NOW);
+    vi.stubGlobal('requestAnimationFrame', (frame: () => void) => { if (frames) frames.push(frame); else setTimeout(frame); });
+    vi.stubGlobal('location', dom.location);
+    vi.doMock('../../assets/loader', () => ({ assets: { get: () => null, loadGroup: async () => ({ loaded: [], failed: [] }) } }));
+    vi.doMock('../../render/renderer', () => ({
+      FlightRenderer: class {
+        dispose = vi.fn();
+        constructor(public opts: { session: FakeSession }) { renderers.push(this); }
+        applySettings() {}
+      },
+    }));
+    vi.doMock('./hud/BattleHud', () => ({ BattleHud: () => null }));
+    vi.doMock('./loadBattle', async () => {
+      const real = await vi.importActual<typeof import('../../sim/battle')>('../../sim/battle');
+      return {
+        loadBattle: async () => ({
+          ...real,
+          loadMap: async (id: 'harek') => { await hold; return real.loadMap(id); },
+          createBattleSession: (...args: Parameters<typeof real.createBattleSession>) => { seeds.push(args[2].seed!); return real.createBattleSession(...args); },
+        }),
+      };
+    });
+    const { Battle } = await import('./Battle');
+    const { defaultSettings } = await import('../../save/save');
+    const props = { choice: DEFAULT_CHOICE, touch: false, settings: defaultSettings(), onSettings() {}, onSetup() {}, onTitle() {}, tips: [], onTip() {} } as unknown as Parameters<typeof Battle>[0];
+    root = createRoot(dom.container as unknown as HTMLElement);
+    root.render(createElement(BattleLoadBoundary, null, createElement(Suspense, null, createElement(Battle, props))));
+    await vi.waitFor(() => expect(renderers).toHaveLength(1), { timeout: 30_000 });
+  });
+
+  afterEach(() => {
+    root?.unmount();
+    for (const m of ['../../assets/loader', '../../render/renderer', './hud/BattleHud', './loadBattle']) vi.doUnmock(m);
+    vi.restoreAllMocks();
+    vi.stubGlobal('location', undefined);
+    vi.stubGlobal('requestAnimationFrame', undefined);
+  });
+
+  it('builds one renderer per press, for the new match, after the old one is gone', async () => {
+    for (let press = 1; press <= 3; press++) {
+      await finishMatch();
+      const old = renderers.at(-1)!;
+      pressAgain();
+      await vi.waitFor(() => expect(renderers).toHaveLength(press + 1), { timeout: 30_000 });
+      expect(old.dispose).toHaveBeenCalledTimes(1);
+      expect(renderers.at(-1)!.opts.session).not.toBe(old.opts.session);
+    }
+    expect(new Set(renderers.map(r => r.opts.session)).size).toBe(renderers.length);
+  }, 90_000);
+
+  it('shows the loading card, not the old report, until the new match is ready', async () => {
+    await finishMatch();
+    let release = () => {};
+    hold = new Promise(resolve => { release = resolve; });
+    pressAgain();
+    await vi.waitFor(() => expect(shown()).toContain(LOADING));
+    expect(shown()).not.toContain(AGAIN);
+    expect(renderers).toHaveLength(1);
+    expect(renderers[0].dispose).toHaveBeenCalledTimes(1);
+    release();
+    await vi.waitFor(() => expect(renderers).toHaveLength(2), { timeout: 30_000 });
+    expect(shown()).not.toContain(LOADING);
+    expect(shown()).not.toContain(AGAIN);
+  }, 90_000);
+
+  it('lets the loading card reach the screen before the heavy build starts', async () => {
+    await finishMatch();
+    frames = [];
+    pressAgain();
+    for (let frame = 0; frame < 2; frame++) {
+      await vi.waitFor(() => expect(frames).toHaveLength(1));
+      expect(shown()).toContain(LOADING);
+      expect(seeds).toHaveLength(1);
+      frames.shift()!();
+    }
+    await vi.waitFor(() => expect(seeds).toHaveLength(2), { timeout: 30_000 });
+    await vi.waitFor(() => expect(renderers).toHaveLength(2), { timeout: 30_000 });
+  }, 90_000);
+
+  it('keeps the seed at the clock plus the round', async () => {
+    for (let press = 0; press < 2; press++) {
+      await finishMatch();
+      const old = renderers.at(-1)!.opts.session;
+      pressAgain();
+      await vi.waitFor(() => expect(renderers.at(-1)!.opts.session).not.toBe(old), { timeout: 30_000 });
+    }
+    expect(seeds).toEqual([0, 1, 2].map(round => (NOW & 0xffff) + round));
+  }, 90_000);
+});
+
 describe('battle choice across a reload (#218)', () => {
   const dusk: BattleChoice = { ...DEFAULT_CHOICE, side: 'veros', time: 'dusk' };
 
