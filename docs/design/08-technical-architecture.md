@@ -133,7 +133,7 @@ content (JSON) ← sim, ui 가 읽음
 ```
 - `sim/`은 `render/`, `ui/`, `audio/`, `input/`, DOM, `window`를 import하지 않는다. three에서는 `Vector3`, `Quaternion`, `Euler` 같은 **수학 타입만** 쓴다.
 - `render/`는 sim 상태를 읽기만 한다. sim에 무언가 알리고 싶으면 **명령**(input 경유)이나 sim이 내는 **이벤트**를 쓴다.
-- 검사: M0 작업에 `src/arch.test.ts`를 넣어, `src/sim/**` 파일 내용에 `from '../render` / `'react'` / `document.` / `window.` 가 없는지 정규식으로 확인한다.
+- 검사: M0 작업에 `src/arch.test.ts`를 넣어, `src/sim/**` 파일 내용에 `from '../render` / `'react'` / `document.` / `window.` 가 없는지 정규식으로 확인한다. 벽시계·타이머·전역 난수(`Date`, `performance.now`, `setTimeout`·`setInterval`·`setImmediate`, `requestAnimationFrame`·`requestIdleCallback`, `Math.random`, `globalThis`·`self` 경유)는 파스 트리로 찾으므로 주석·문자열 속 단어는 걸리지 않는다. `src/sim/**` 시험 파일의 예외는 `SIM_TEST_CLOCK_EXCEPTIONS`에 이름을 적는다.
 
 ## 8.4 월드와 엔티티
 
