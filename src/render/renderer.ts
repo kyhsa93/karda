@@ -53,6 +53,7 @@ export interface RendererOptions {
   session: FlightSession;
   input: FlightInput;
   onFrame?: (info: FrameInfo) => void;
+  onCrash: (error: unknown) => void;
 }
 
 export const OVERVIEW_AGL = 180;
@@ -206,6 +207,16 @@ export class FlightRenderer {
   };
 
   private tick = (now: number) => {
+    try {
+      this.runFrame(now);
+    } catch (error) {
+      this.opts.onCrash(error);
+      return;
+    }
+    this.raf = requestAnimationFrame(this.tick);
+  };
+
+  private runFrame(now: number) {
     const { session, input, mount, overlay } = this.opts;
     const world = session.world;
     const dt = frameDt(now, this.last); this.last = now;
@@ -371,8 +382,7 @@ export class FlightRenderer {
     });
 
     this.opts.onFrame?.({ simDt: steps * STEP, cockpit, agl });
-    this.raf = requestAnimationFrame(this.tick);
-  };
+  }
 
   get mpd() { return this.instruments.mpd; }
 

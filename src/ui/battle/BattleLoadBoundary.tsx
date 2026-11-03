@@ -6,7 +6,7 @@ export function useRaiseInRender() {
   return useCallback((error: unknown) => set(() => { throw error; }), []);
 }
 
-export class BattleLoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+export class BattleLoadBoundary extends Component<{ children: ReactNode; strings?: 'battle.loadError' | 'battle.matchError' }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -15,12 +15,13 @@ export class BattleLoadBoundary extends Component<{ children: ReactNode }, { fai
 
   render() {
     if (!this.state.failed) return this.props.children;
+    const { strings = 'battle.loadError' } = this.props;
     return (
       <div className="menu">
         <div className="card" role="alert">
-          <p className="sub">{t('battle.loadError.text')}</p>
+          <p className="sub">{t(`${strings}.text`)}</p>
           <div className="pause-buttons">
-            <button className="go" onClick={() => window.location.reload()}>{t('battle.loadError.retry')}</button>
+            <button className="go" onClick={() => window.location.reload()}>{t(`${strings}.retry`)}</button>
           </div>
         </div>
       </div>

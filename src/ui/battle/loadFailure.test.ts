@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createElement, Suspense, type ReactElement } from 'react';
+import { createElement, Suspense, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { t } from '../../content/strings';
 import { memoryStorage, type KeyValue } from '../../save/storage';
@@ -56,7 +56,7 @@ function fakeDom(hash: string) {
   doc.defaultView = win;
   vi.stubGlobal('window', win);
   vi.stubGlobal('document', doc);
-  return { container: doc.createElement('div') as FakeNode, reload };
+  return { container: doc.createElement('div') as FakeNode, reload, location: win.location as { hash: string; search: string } };
 }
 
 function buttons(node: FakeNode): FakeNode[] {
@@ -164,6 +164,128 @@ describe('battle chunk load failure (#218)', () => {
     await app('#/battle', async () => ({}));
     await vi.waitFor(() => expect(buttons(dom.container).find(b => b.textContent === VPA)?.attrs.class).toBe('on'));
   });
+});
+
+describe('battle failure during the match (#264)', () => {
+  const MATCH_TEXT = '오류로 이 경기를 이어갈 수 없습니다. 다시 불러오면 전장 설정으로 돌아갑니다.';
+  const MATCH_RETRY = '다시 불러오기';
+  const boom = new Error('frame boom');
+  const VPA = t('battle.sides.veros');
+  const BACK = t('battle.setup.back');
+  let root: Root;
+  let dom: ReturnType<typeof fakeDom>;
+  let logged: ReturnType<typeof vi.spyOn>;
+  let renderer: { opts: { onCrash: (error: unknown) => void }; dispose: ReturnType<typeof vi.fn> } | undefined;
+  let breakHud: (() => void) | undefined;
+
+  const start = async (hash: string) => {
+    dom = fakeDom(hash);
+    vi.stubGlobal('location', dom.location);
+    const { App } = await import('../../App');
+    root = createRoot(dom.container as unknown as HTMLElement);
+    root.render(createElement(App));
+  };
+  const pressLabelled = (label: string) => press(buttons(dom.container).find(b => b.textContent === label)!);
+  const pressDeploy = () => press(buttons(dom.container).find(b => b.textContent.includes(DEPLOY))!);
+  const enterMatch = async () => {
+    await start('#/battle');
+    await vi.waitFor(() => expect(dom.container.textContent).toContain(DEPLOY));
+    pressLabelled(VPA);
+    await vi.waitFor(() => expect(buttons(dom.container).find(b => b.textContent === VPA)?.attrs.class).toBe('on'));
+    pressDeploy();
+    await vi.waitFor(() => { expect(renderer).toBeDefined(); expect(breakHud).toBeDefined(); }, { timeout: 30_000 });
+    expect(dom.container.textContent).not.toContain(MATCH_TEXT);
+  };
+  const expectMatchError = async () => {
+    await vi.waitFor(() => expect(dom.container.textContent).toContain(MATCH_TEXT));
+    expect(dom.container.textContent).not.toContain(TEXT);
+    expect(buttons(dom.container).map(b => b.textContent)).toEqual([MATCH_RETRY]);
+    expect(logged.mock.calls.flat()).toContain(boom);
+    expect(dom.reload).not.toHaveBeenCalled();
+    expect(renderer!.dispose).toHaveBeenCalledTimes(1);
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderer = undefined;
+    breakHud = undefined;
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    vi.doMock('../../assets/loader', () => ({ assets: { get: () => null, loadGroup: async () => ({ loaded: [], failed: [] }) } }));
+    vi.doMock('../../render/renderer', () => ({
+      FlightRenderer: class {
+        dispose = vi.fn();
+        constructor(public opts: { onCrash: (error: unknown) => void }) { renderer = this; }
+        applySettings() {}
+      },
+    }));
+    vi.doMock('./hud/BattleHud', () => ({
+      BattleHud: () => {
+        const [broken, set] = useState(false);
+        breakHud = () => set(true);
+        if (broken) throw boom;
+        return null;
+      },
+    }));
+  });
+
+  afterEach(() => {
+    root?.unmount();
+    vi.doUnmock('../../assets/loader');
+    vi.doUnmock('../../render/renderer');
+    vi.doUnmock('./hud/BattleHud');
+    vi.restoreAllMocks();
+    vi.stubGlobal('sessionStorage', undefined);
+    vi.stubGlobal('location', undefined);
+  });
+
+  it('says the match cannot go on, in words apart from a load failure', () => {
+    expect(t('battle.matchError.text')).toBe(MATCH_TEXT);
+    expect(t('battle.matchError.retry')).toBe(MATCH_RETRY);
+    expect(TEXT).toBe('전장을 불러오지 못했습니다. 연결을 확인하고 다시 시도하세요.');
+    expect(RETRY).toBe('다시 시도');
+  });
+
+  it('shows the match error when the frame loop reports a crash, and only reloads on the press', async () => {
+    await enterMatch();
+    renderer!.opts.onCrash(boom);
+    await expectMatchError();
+    press(buttons(dom.container)[0]);
+    expect(dom.reload).toHaveBeenCalledTimes(1);
+  }, 60_000);
+
+  it('shows the match error when React fails to render the match screen', async () => {
+    await enterMatch();
+    breakHud!();
+    await expectMatchError();
+  }, 60_000);
+
+  it('keeps the old words when the map fails before the match screen is up', async () => {
+    vi.doMock('./loadBattle', () => ({ loadBattle: () => Promise.resolve({ loadMap: () => Promise.reject(boom) }) }));
+    await start('#/battle');
+    await vi.waitFor(() => expect(dom.container.textContent).toContain(DEPLOY));
+    pressDeploy();
+    await vi.waitFor(() => expect(dom.container.textContent).toContain(TEXT));
+    expect(dom.container.textContent).not.toContain(MATCH_TEXT);
+    expect(buttons(dom.container).map(b => b.textContent)).toEqual([RETRY]);
+    vi.doUnmock('./loadBattle');
+  }, 60_000);
+
+  it('reloads into the setup screen with the chosen side, and its back button reaches the title', async () => {
+    await enterMatch();
+    renderer!.opts.onCrash(boom);
+    await expectMatchError();
+    const hash = dom.location.hash;
+    expect(hash).toBe('#/battle/harek/quick');
+    root.unmount();
+    vi.resetModules();
+    await start(hash);
+    await vi.waitFor(() => expect(buttons(dom.container).find(b => b.textContent === VPA)?.attrs.class).toBe('on'), { timeout: 30_000 });
+    expect(dom.container.textContent).not.toContain(MATCH_TEXT);
+    pressLabelled(BACK);
+    await vi.waitFor(() => expect(dom.container.textContent).toContain(t('title.name')));
+    expect(dom.location.hash).toBe('#/title');
+  }, 90_000);
 });
 
 describe('battle choice across a reload (#218)', () => {
