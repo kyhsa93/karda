@@ -7,6 +7,7 @@ import { drawCanopyCracks } from './canopy';
 import { agl as aglOf, airspeed } from '../sim/heli/state';
 import type { FlightSession } from '../sim/session';
 import { STEP } from '../sim/world';
+import { drainSteps, frameDt } from './frameClock';
 import type { FlightInput } from '../input/input';
 import { Instruments } from './cockpit/instruments';
 import { applyLoadout, buildHeli, type HeliModel } from './heliModel';
@@ -203,11 +204,11 @@ export class FlightRenderer {
   private tick = (now: number) => {
     const { session, input, mount, overlay } = this.opts;
     const world = session.world;
-    const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now;
+    const dt = frameDt(now, this.last); this.last = now;
     input.update(world, dt);
-    this.acc += dt;
-    let steps = 0;
-    while (this.acc >= STEP) { session.step(STEP); this.acc -= STEP; steps++; }
+    const { steps, acc } = drainSteps(this.acc + dt);
+    this.acc = acc;
+    for (let i = 0; i < steps; i++) session.step(STEP);
     const h = world.player, c = world.controls, model = this.model, scn = this.scene, camera = this.camera;
 
     model.root.position.copy(h.pos);
