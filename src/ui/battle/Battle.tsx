@@ -8,6 +8,7 @@ import { DIFFICULTIES } from '../../sim/difficulty';
 import type { FlightSession } from '../../sim/session';
 import { Flight } from '../screens/Flight';
 import type { BattleChoice } from './BattleSetup';
+import { useRaiseInRender } from './BattleLoadBoundary';
 import { loadBattle } from './loadBattle';
 import { BattleHud } from './hud/BattleHud';
 import { sideSymbol } from './hud/symbols';
@@ -17,6 +18,8 @@ type BattleModule = Awaited<ReturnType<typeof loadBattle>>;
 type Runtime = ReturnType<BattleModule['createBattleSession']>['runtime'];
 type KitId = BattleModule['KIT_IDS'][number];
 type ClassId = BattleModule['CLASS_IDS'][number];
+
+export const checkBattleLoads = () => loadBattle().then(mod => mod.loadMap('harek'));
 
 export function clock(sec: number) {
   const s = Math.max(0, Math.floor(sec));
@@ -29,6 +32,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
   const [game, setGame] = useState<{ mod: BattleModule; session: FlightSession; runtime: Runtime } | null>(null);
   const [round, setRound] = useState(0);
   const [renderer, setRenderer] = useState<FlightRenderer | null>(null);
+  const raise = useRaiseInRender();
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -40,7 +44,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
       session.world.conditions.time = choice.time;
       session.start();
       setGame({ mod, session, runtime });
-    })();
+    })().catch(error => { if (alive) raise(error); });
     return () => { alive = false; };
   }, [choice, round]);
   if (!game) return <div className="menu"><div className="card"><p className="sub">{t('battle.deploy.loading')}</p></div></div>;

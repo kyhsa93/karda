@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseHash, toHash, UiState } from './state';
+import { isBattleRoute, parseHash, toHash, UiState } from './state';
 
 describe('screen routing', () => {
   it.each([
@@ -14,6 +14,11 @@ describe('screen routing', () => {
     ['#/nonsense', { name: 'title' }],
   ])('%s', (hash, screen) => {
     expect(parseHash(hash)).toEqual(screen);
+  });
+
+  it('tells a battle route, which a reload lands on, from the setup route', () => {
+    expect(isBattleRoute(toHash({ name: 'battle', map: 'harek', mode: 'quick' }))).toBe(true);
+    for (const hash of ['', '#/title', toHash({ name: 'battleSetup' }), '#/battle/', '#/battlefield/x']) expect(isBattleRoute(hash)).toBe(false);
   });
 
   it('round-trips every screen', () => {

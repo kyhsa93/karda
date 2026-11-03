@@ -15,6 +15,8 @@ export function parseHash(hash: string): Screen {
   return { name: 'title' };
 }
 
+export const isBattleRoute = (hash: string) => /^#\/?battle\/./.test(hash);
+
 export function toHash(screen: Screen): string {
   if (screen.name === 'battleSetup') return '#/battle';
   if (screen.name === 'battle') return `#/battle/${screen.map}/${screen.mode}`;
