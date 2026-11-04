@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cardDevice, Coach, COACH_STEPS, deathTip, MIN_SHOW, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
-import { hasString, tList } from '../../content/strings';
+import { hasString, t, tList } from '../../content/strings';
 
 const base: CoachFacts = { agl: 60, tads: false, identified: 0, flips: 0, detected: 0, deaths: 0, playing: true, foot: false, walked: 0, shots: 0, inPoint: false };
 const foot: CoachFacts = { ...base, foot: true };
@@ -59,6 +59,23 @@ describe('battle coach (wiki 8.10)', () => {
     for (const s of COACH_STEPS) expect(hasString(`battle.coach.${s.id}`), s.id).toBe(true);
     for (const r of ['crewKilled', 'terrain', 'outOfBounds', 'hardLanding', undefined]) expect(hasString(deathTip(r, false))).toBe(true);
     expect(hasString(deathTip('crewKilled', true))).toBe(true);
+  });
+
+  it('gives a soldier killed by enemy fire an infantry tip, even right after a missile hit', () => {
+    expect(deathTip('killed', false)).toBe('battle.tips.soldier');
+    expect(deathTip('killed', true)).toBe('battle.tips.soldier');
+    const line = t(deathTip('killed', false));
+    expect(line).not.toBe('battle.tips.soldier');
+    expect(line).not.toMatch(/대공|팝업/);
+  });
+
+  it('keeps the helicopter death tips', () => {
+    expect(deathTip('crewKilled', false)).toBe('battle.tips.fire');
+    expect(deathTip('rotorLoss', false)).toBe('battle.tips.fire');
+    expect(deathTip('crewKilled', true)).toBe('battle.tips.missile');
+    expect(deathTip('rotorLoss', true)).toBe('battle.tips.missile');
+    expect(t('battle.tips.fire')).toBe('적 대공에 맞았습니다 — 거점 위에서 오래 떠 있지 말고 능선 뒤에서 팝업하세요');
+    expect(t('battle.tips.missile')).toBe('적외선 미사일 — 경보가 울리면 플레어(F · 플레어 버튼)');
   });
 
   it('picks the control card for the device in hand, with a line set for each', () => {
