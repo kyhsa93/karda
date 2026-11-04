@@ -52,6 +52,7 @@ export class FlightInput {
   private assistNear = false;
   private padSoldier: boolean[] = [];
   mouseAds = false;
+  private mouseHeld = 0;
   soldierYaw = 0;
   soldierPitch = 0;
   private role: 'heli' | 'soldier' | 'none' = 'heli';
@@ -158,6 +159,16 @@ export class FlightInput {
   releaseMouse() {
     this.mouseFire = false;
     this.mouseAds = false;
+  }
+
+  mouseEvent(e: { type: string; pointerType: string; buttons: number }, armed: boolean) {
+    if (e.pointerType !== 'mouse') return;
+    const rose = e.buttons & ~(e.type === 'pointerdown' ? 0 : this.mouseHeld);
+    this.mouseHeld = e.buttons;
+    if (!(e.buttons & 1)) this.mouseFire = false;
+    if (!(e.buttons & 2)) this.mouseAds = false;
+    if (armed && rose & 1) this.mouseFire = true;
+    if (armed && rose & 2) this.mouseAds = true;
   }
 
   watchMouseRelease(win: EventTarget, doc: EventTarget, locked: () => boolean) {

@@ -267,18 +267,19 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const drag = useRef<{ id: number; x: number; y: number; sx: number; sy: number } | null>(null);
   const pinch = useRef(new Pinch());
   const locked = () => document.pointerLockElement === mountRef.current;
+  const armed = () => locked() && wantsPointerLock(roleOf(sim), touch);
   useEffect(() => input.watchMouseRelease(window, document, locked), [input]);
   const onPointerDown = (e: RPointerEvent) => {
+    input.mouseEvent(e, armed());
     if (wantsPointerLock(roleOf(sim), touch) && e.pointerType === 'mouse') {
-      if (!locked()) { mountRef.current?.requestPointerLock?.(); return; }
-      if (e.button === 0) input.mouseFire = true;
-      if (e.button === 2) input.mouseAds = true;
+      if (!locked()) mountRef.current?.requestPointerLock?.();
       return;
     }
     if (pinch.current.down(e.pointerId, e.clientX, e.clientY)) { drag.current = null; return; }
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY };
   };
   const onPointerMove = (e: RPointerEvent) => {
+    input.mouseEvent(e, armed());
     if (locked()) { input.look(e.movementX, e.movementY); return; }
     const step = pinch.current.move(e.pointerId, e.clientX, e.clientY);
     if (step) { if (sim.tads.active) zoomTads(sim.tads, step); return; }
@@ -288,7 +289,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
     d.x = e.clientX; d.y = e.clientY;
   };
   const onPointerUp = (e: RPointerEvent) => {
-    if (locked()) { if (e.button === 0) input.mouseFire = false; if (e.button === 2) input.mouseAds = false; return; }
+    input.mouseEvent(e, armed());
+    if (locked()) return;
     pinch.current.up(e.pointerId);
     const d = drag.current;
     if (d?.id !== e.pointerId) return;
