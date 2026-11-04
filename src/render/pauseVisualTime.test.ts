@@ -8,6 +8,7 @@ import type { BattleMapDef } from '../sim/battle/schema';
 import { STANDARD_LOADOUT } from '../sim/heli/loadout';
 import { STEP } from '../sim/world';
 import { FlightRenderer, type FrameInfo } from './renderer';
+import type { TadsView } from './tadsView';
 
 vi.mock('three', async original => {
   const three = await original<typeof import('three')>();
@@ -39,6 +40,8 @@ function fakeCanvas() {
 const harek = JSON.parse(harekRaw) as BattleMapDef;
 const FRAME_MS = 50;
 const SIX_SECONDS = 120;
+
+vi.setConfig({ testTimeout: 60_000 });
 
 interface Part { alive: boolean; life: number; pos: THREE.Vector3 }
 type Layers = { glow: { parts: Part[] }; smoke: { parts: Part[] } };
@@ -88,7 +91,7 @@ describe('pausing stops visual time (#269)', () => {
     const mount = { clientWidth: 640, clientHeight: 360, appendChild() {} } as unknown as HTMLElement;
     renderer = new FlightRenderer({ mount, overlay, session, input, onCrash: e => { throw e; }, onFrame: f => frames.push(f) });
     renderer.audio = { update: (s: (typeof audio)[number]) => audio.push(s), onEvent() {} } as unknown as GameAudio;
-    clock = performance.now();
+    clock = Math.ceil(performance.now());
     run(2);
     fireUntilBothLayersLive();
   }, 60_000);
@@ -152,5 +155,78 @@ describe('pausing stops visual time (#269)', () => {
     battle.session.paused = true;
     run(SIX_SECONDS);
     expect(renderer.paceRatio).toBeCloseTo(running, 6);
+  });
+});
+
+describe('the PNVS pass adds no visual time (#271)', () => {
+  let clock: number;
+  let scheduled: FrameRequestCallback[];
+  let session: ReturnType<typeof createBattleSession>['session'];
+  let renderer: FlightRenderer;
+  let passes: { mock: { calls: unknown[] } };
+
+  const run = (n: number, frameMs: number) => { for (let i = 0; i < n; i++) scheduled.shift()!(clock += frameMs); };
+  const advance = (n: number, frameMs: number) => {
+    const world = session.world.time, puppets = renderer.units.puppets.time, drawn = passes.mock.calls.length;
+    run(n, frameMs);
+    return { world: session.world.time - world, puppets: renderer.units.puppets.time - puppets, drawn: passes.mock.calls.length - drawn };
+  };
+
+  function fly(seed: number) {
+    const battle = createBattleSession(harek, 'quick', { side: 'coalition', seed });
+    session = battle.session;
+    session.start();
+    const pad = battle.runtime.spawnPoints(session.world).find(p => p.id === 'base')!;
+    expect(session.deploy(battle.runtime.spawnFor(pad, STANDARD_LOADOUT))).toBe(true);
+    const overlay = fakeCanvas() as unknown as HTMLCanvasElement;
+    const mount = { clientWidth: 640, clientHeight: 360, appendChild() {} } as unknown as HTMLElement;
+    renderer = new FlightRenderer({ mount, overlay, session, input: new FlightInput(), onCrash: e => { throw e; } });
+    passes = vi.spyOn((renderer as unknown as { pnvsView: TadsView }).pnvsView, 'renderImage');
+    clock = performance.now();
+    run(2, FRAME_MS);
+    expect(renderer.view).toBe('cockpit');
+    expect(session.world.avatar.kind).toBe('heli');
+  }
+
+  beforeEach(() => {
+    scheduled = [];
+    vi.stubGlobal('window', { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {}, scrollTo() {} });
+    vi.stubGlobal('document', { createElement: fakeCanvas, createElementNS: fakeCanvas });
+    vi.stubGlobal('requestAnimationFrame', (fn: FrameRequestCallback) => scheduled.push(fn));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([[1, FRAME_MS], [2, FRAME_MS], [1, 1000 / 60]])('keeps puppet time on game time with PNVS on and off (seed %i, %f ms frames)', (seed, frameMs) => {
+    fly(seed);
+    const frames = Math.ceil(1000 / frameMs);
+    renderer.pnvs = true;
+    const on = advance(frames, frameMs);
+    renderer.pnvs = false;
+    const off = advance(frames, frameMs);
+    expect(on.drawn).toBe(frames);
+    expect(off.drawn).toBe(0);
+    for (const window of [on, off]) {
+      expect(window.world).toBeGreaterThanOrEqual(0.5);
+      expect(window.puppets / window.world).toBeCloseTo(1, 6);
+    }
+  });
+
+  it('holds puppet time for six seconds of paused frames with PNVS on and carries on when resumed', () => {
+    fly(1);
+    renderer.pnvs = true;
+    session.paused = true;
+    const paused = advance(SIX_SECONDS, FRAME_MS);
+    expect(paused.drawn).toBe(SIX_SECONDS);
+    expect(paused.world).toBe(0);
+    expect(paused.puppets).toBe(0);
+    session.paused = false;
+    const resumed = advance(20, FRAME_MS);
+    expect(resumed.drawn).toBe(20);
+    expect(resumed.world).toBeGreaterThanOrEqual(0.5);
+    expect(resumed.puppets / resumed.world).toBeCloseTo(1, 6);
   });
 });
