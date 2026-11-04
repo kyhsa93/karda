@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { World } from '../sim/world';
+import harekRaw from '../content/battle/maps/harek.json?raw';
+import { createBattleSession } from '../sim/battle/runtime';
+import type { BattleMapDef } from '../sim/battle/schema';
+import { STEP, World } from '../sim/world';
 import { commandForKey, FLIGHT_KEYS, GAMEPAD_BUTTONS, KEY_COMMANDS, PAD_HEAD_LOOK } from './bindings';
 import { Pinch } from './pinch';
 import { FlightInput } from './input';
@@ -175,5 +178,81 @@ describe('soldier aim assist and gamepad (B2-11)', () => {
     buttons[2].pressed = true;
     input.update(w, 0.1);
     expect(cmds).toContain('reload');
+  });
+});
+
+describe('mouse buttons on focus loss (#267)', () => {
+  const harek = JSON.parse(harekRaw) as BattleMapDef;
+
+  function fighter(seed: number) {
+    const { session } = createBattleSession(harek, 'quick', { side: 'coalition', seed });
+    session.start();
+    const base = harek.bases[0].position;
+    session.deploy({ kind: 'soldier', x: base[0] + 30, z: base[1] - 30, headingDeg: 0, cls: 'assault' });
+    const world = session.world, input = new FlightInput();
+    input.gamepads = () => [];
+    const mag = () => world.soldierArms.ammo[world.soldierArms.selected]!.mag;
+    const run = (seconds: number) => { for (let i = 0; i < seconds * 120; i++) { input.update(world, STEP); session.step(STEP); } };
+    return { world, input, mag, run };
+  }
+
+  function watched(seed: number) {
+    const f = fighter(seed), win = new EventTarget(), doc = new EventTarget(), lock = { held: true };
+    const stop = f.input.watchMouseRelease(win, doc, () => lock.held);
+    return { ...f, win, doc, lock, stop };
+  }
+
+  const paths: [string, (f: ReturnType<typeof watched>) => void][] = [
+    ['lock lost', f => { f.lock.held = false; f.doc.dispatchEvent(new Event('pointerlockchange')); }],
+    ['blur, lock kept', f => { f.win.dispatchEvent(new Event('blur')); }],
+    ['blur, then lock lost', f => { f.win.dispatchEvent(new Event('blur')); f.lock.held = false; f.doc.dispatchEvent(new Event('pointerlockchange')); }],
+  ];
+
+  describe.each([1, 2])('seed %i', seed => {
+    it.each(paths)('%s stops firing and leaves the magazine alone', (_, lose) => {
+      const f = watched(seed);
+      f.run(0.1);
+      const full = f.mag();
+      f.input.mouseFire = true; f.input.mouseAds = true;
+      f.run(0.5);
+      expect(f.world.soldierCommands).toMatchObject({ fire: true, ads: true });
+      const firing = f.mag(), shots = f.world.soldierArms.shots;
+      expect(firing).toBeLessThan(full);
+      lose(f);
+      expect(f.input).toMatchObject({ mouseFire: false, mouseAds: false });
+      f.run(2);
+      expect(f.world.soldierCommands).toMatchObject({ fire: false, ads: false });
+      expect(f.mag()).toBe(firing);
+      expect(f.world.soldierArms.shots).toBe(shots);
+    });
+
+    it('fires the same number of shots while the lock holds', () => {
+      const count = (f: ReturnType<typeof fighter>) => {
+        f.run(0.1);
+        f.input.mouseFire = true;
+        f.run(2);
+        return f.world.soldierArms.shots;
+      };
+      const plain = count(fighter(seed));
+      expect(plain).toBeGreaterThan(0);
+      const held = watched(seed);
+      held.doc.dispatchEvent(new Event('pointerlockchange'));
+      expect(count(held)).toBe(plain);
+    });
+  });
+
+  it('keeps a press when the lock is gained', () => {
+    const f = watched(1);
+    f.input.mouseFire = true; f.input.mouseAds = true;
+    f.doc.dispatchEvent(new Event('pointerlockchange'));
+    expect(f.input).toMatchObject({ mouseFire: true, mouseAds: true });
+  });
+
+  it('stops listening when disposed', () => {
+    const f = watched(1);
+    f.stop();
+    f.input.mouseFire = true;
+    f.win.dispatchEvent(new Event('blur'));
+    expect(f.input.mouseFire).toBe(true);
   });
 });

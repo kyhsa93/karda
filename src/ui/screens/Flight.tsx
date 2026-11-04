@@ -152,7 +152,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   useEffect(() => {
     if (snap.mode === 'play') { ensureAudio(); input.centerView(); }
     else if (document.pointerLockElement) document.exitPointerLock();
-    input.mouseFire = false; input.mouseAds = false;
+    input.releaseMouse();
   }, [snap.mode]);
 
   useEffect(() => {
@@ -267,6 +267,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const drag = useRef<{ id: number; x: number; y: number; sx: number; sy: number } | null>(null);
   const pinch = useRef(new Pinch());
   const locked = () => document.pointerLockElement === mountRef.current;
+  useEffect(() => input.watchMouseRelease(window, document, locked), [input]);
   const onPointerDown = (e: RPointerEvent) => {
     if (wantsPointerLock(roleOf(sim), touch) && e.pointerType === 'mouse') {
       if (!locked()) { mountRef.current?.requestPointerLock?.(); return; }
