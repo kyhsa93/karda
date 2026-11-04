@@ -410,6 +410,230 @@ describe('play again (#265)', () => {
   }, 90_000);
 });
 
+describe('losing the WebGL context during the match (#268)', () => {
+  const PAUSED = '그래픽 연결이 끊겨 화면을 표시할 수 없습니다. 경기를 멈추고 복구를 기다립니다.';
+  const RUNNING = '그래픽 연결이 끊겨 화면을 표시할 수 없습니다. 복구를 기다리는 동안 경기는 계속됩니다.';
+  const STUCK = '화면을 복구하지 못해 이 경기를 이어갈 수 없습니다. 다시 불러오면 전장 설정으로 돌아갑니다.';
+  const RELOAD = '다시 불러오기';
+  const STEP = 1 / 120;
+  type Session = { mode: string; paused: boolean; frozen: boolean; world: { time: number }; step: (dt: number) => void; publish: () => void };
+  let root: Root;
+  let dom: ReturnType<typeof fakeDom>;
+  let renderer: { opts: { session: Session; onCrash: (error: unknown) => void; onContextLost: () => void; onContextRestored: () => void }; dispose: ReturnType<typeof vi.fn> } | undefined;
+  let keydown: Set<(e: unknown) => void>;
+  let logged: ReturnType<typeof vi.spyOn>;
+
+  const text = () => dom.container.textContent;
+  const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setImmediate(done)); };
+  const labels = () => buttons(dom.container).map(b => b.textContent);
+  const pressLabelled = (label: string) => press(buttons(dom.container).find(b => b.textContent.includes(label))!);
+  const session = () => renderer!.opts.session;
+  const advances = () => { const before = session().world.time; session().step(STEP); return session().world.time - before; };
+  const key = (code: string) => { for (const fn of keydown) fn({ code, repeat: false, preventDefault() {} }); };
+  const inSortie = async () => {
+    dom = fakeDom('#/battle');
+    vi.stubGlobal('location', dom.location);
+    const win = window as unknown as { addEventListener: (type: string, fn: (e: unknown) => void) => void; removeEventListener: (type: string, fn: (e: unknown) => void) => void };
+    win.addEventListener = (type, fn) => { if (type === 'keydown') keydown.add(fn); };
+    win.removeEventListener = (type, fn) => { if (type === 'keydown') keydown.delete(fn); };
+    const { App } = await import('../../App');
+    root = createRoot(dom.container as unknown as HTMLElement);
+    root.render(createElement(App));
+    await vi.waitFor(() => expect(text()).toContain(DEPLOY));
+    press(buttons(dom.container).find(b => b.textContent.includes(DEPLOY))!);
+    await vi.waitFor(() => { expect(renderer).toBeDefined(); expect(text()).toContain(t('battle.deploy.go')); }, { timeout: 30_000 });
+  };
+  const inPlay = async () => {
+    await inSortie();
+    pressLabelled(t('battle.deploy.go'));
+    await vi.waitFor(() => expect(session().mode).toBe('play'));
+    await vi.waitFor(() => expect(text()).not.toContain(t('battle.deploy.go')));
+  };
+  const lose = async (expected: string) => {
+    renderer!.opts.onContextLost();
+    await vi.waitFor(() => expect(text()).toContain(expected));
+  };
+  const expectNoErrorScreen = () => {
+    expect(text()).not.toContain(t('battle.matchError.text'));
+    expect(dom.reload).not.toHaveBeenCalled();
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderer = undefined;
+    keydown = new Set();
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    vi.doMock('../../assets/loader', () => ({ assets: { get: () => null, loadGroup: async () => ({ loaded: [], failed: [] }) } }));
+    vi.doMock('../../audio/game', () => ({ GameAudio: class { voice = { enabled: false }; setVolume() {} async loadSamples() {} async resume() {} dispose() {} } }));
+    vi.doMock('../../render/renderer', () => ({
+      FlightRenderer: class {
+        dispose = vi.fn();
+        constructor(public opts: NonNullable<typeof renderer>['opts']) { renderer = this; }
+        applySettings() {}
+      },
+    }));
+    vi.doMock('./hud/BattleHud', () => ({ BattleHud: () => null }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    root?.unmount();
+    vi.doUnmock('../../assets/loader');
+    vi.doUnmock('../../audio/game');
+    vi.doUnmock('../../render/renderer');
+    vi.doUnmock('./hud/BattleHud');
+    vi.restoreAllMocks();
+    vi.stubGlobal('sessionStorage', undefined);
+    vi.stubGlobal('location', undefined);
+  });
+
+  it('tells the player in Korean and stops the match while the context is gone', async () => {
+    await inPlay();
+    expect(text()).not.toContain(PAUSED);
+    expect(session().paused).toBe(false);
+    expect(advances()).toBeGreaterThan(0);
+    await lose(PAUSED);
+    await vi.waitFor(() => expect(session().paused).toBe(true));
+    expect(advances()).toBe(0);
+    expect(labels()).not.toContain(RELOAD);
+    expectNoErrorScreen();
+  }, 60_000);
+
+  it('takes the notice away and resumes the match on restore', async () => {
+    await inPlay();
+    await lose(PAUSED);
+    await vi.waitFor(() => expect(session().paused).toBe(true));
+    renderer!.opts.onContextRestored();
+    await vi.waitFor(() => expect(text()).not.toContain(PAUSED));
+    await vi.waitFor(() => expect(session().paused).toBe(false));
+    expect(advances()).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('keeps a pause menu the player opened through a loss and restore', async () => {
+    await inPlay();
+    key('Escape');
+    await vi.waitFor(() => expect(text()).toContain(t('pause.title')));
+    await vi.waitFor(() => expect(session().paused).toBe(true));
+    await lose(PAUSED);
+    renderer!.opts.onContextRestored();
+    await vi.waitFor(() => expect(text()).not.toContain(PAUSED));
+    expect(text()).toContain(t('pause.title'));
+    expect(session().paused).toBe(true);
+    expect(advances()).toBe(0);
+    pressLabelled(t('brief.continue'));
+    await vi.waitFor(() => expect(session().paused).toBe(false));
+  }, 60_000);
+
+  it('after ten seconds says the match cannot go on and offers the reload', async () => {
+    await inPlay();
+    renderer!.opts.onContextLost();
+    await settle();
+    expect(text()).toContain(PAUSED);
+    vi.advanceTimersByTime(9_999);
+    await settle();
+    expect(text()).not.toContain(STUCK);
+    vi.advanceTimersByTime(1);
+    await vi.waitFor(() => expect(text()).toContain(STUCK));
+    expect(text()).not.toContain(PAUSED);
+    expect(labels()).toContain(RELOAD);
+    expect(session().paused).toBe(true);
+    expect(advances()).toBe(0);
+    expect(dom.reload).not.toHaveBeenCalled();
+    pressLabelled(RELOAD);
+    expect(dom.reload).toHaveBeenCalledTimes(1);
+  }, 60_000);
+
+  it('recovers from the stuck notice if the context comes back late, and never reports stuck again for the old loss', async () => {
+    await inPlay();
+    await lose(PAUSED);
+    vi.advanceTimersByTime(10_000);
+    await vi.waitFor(() => expect(text()).toContain(STUCK));
+    renderer!.opts.onContextRestored();
+    await vi.waitFor(() => expect(text()).not.toContain(STUCK));
+    await vi.waitFor(() => expect(session().paused).toBe(false));
+    expect(labels()).not.toContain(RELOAD);
+    await lose(PAUSED);
+    expect(text()).not.toContain(STUCK);
+  }, 60_000);
+
+  it('does not start a second timer from a restore before the deadline', async () => {
+    await inPlay();
+    await lose(PAUSED);
+    vi.advanceTimersByTime(6_000);
+    renderer!.opts.onContextRestored();
+    await vi.waitFor(() => expect(text()).not.toContain(PAUSED));
+    await vi.waitFor(() => expect(vi.getTimerCount()).toBe(0));
+    vi.advanceTimersByTime(12_000);
+    await settle();
+    expect(text()).not.toContain(STUCK);
+    expect(session().paused).toBe(false);
+  }, 60_000);
+
+  it('clears the timer on leaving, so no notice or pause lands on what comes next', async () => {
+    await inPlay();
+    key('Escape');
+    await vi.waitFor(() => expect(text()).toContain(t('pause.title')));
+    await lose(PAUSED);
+    await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+    pressLabelled(t('brief.toList'));
+    await vi.waitFor(() => expect(text()).toContain(DEPLOY));
+    expect(renderer!.dispose).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(12_000);
+    await settle();
+    expect(text()).not.toContain(STUCK);
+    expect(text()).not.toContain(PAUSED);
+  }, 60_000);
+
+  it('calls the match stopped on the first deploy screen, where the clock has not started', async () => {
+    await inSortie();
+    expect(session().frozen).toBe(true);
+    await lose(PAUSED);
+    expect(session().paused).toBe(false);
+    expect(advances()).toBe(0);
+  }, 60_000);
+
+  it('does not pause a later deploy screen, says the match runs on, and pauses as soon as play starts', async () => {
+    await inSortie();
+    session().frozen = false;
+    await lose(RUNNING);
+    expect(text()).not.toContain(PAUSED);
+    expect(session().paused).toBe(false);
+    expect(advances()).toBeGreaterThan(0);
+    pressLabelled(t('battle.deploy.go'));
+    await vi.waitFor(() => expect(session().mode).toBe('play'));
+    await vi.waitFor(() => expect(text()).toContain(PAUSED));
+    await vi.waitFor(() => expect(session().paused).toBe(true));
+    expect(advances()).toBe(0);
+  }, 60_000);
+
+  it('leaves the match report usable, where nothing needs the context', async () => {
+    await inPlay();
+    await lose(PAUSED);
+    session().mode = 'done';
+    session().publish();
+    await vi.waitFor(() => expect(text()).toContain(t('battle.report.again')));
+    expect(text()).not.toContain(PAUSED);
+    expect(text()).not.toContain(RUNNING);
+    expect(session().paused).toBe(false);
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    expect(text()).not.toContain(STUCK);
+    expect(labels()).toEqual([t('battle.report.again'), t('battle.report.setup'), t('battle.report.title')]);
+  }, 60_000);
+
+  it('never reaches the error screen through a loss', async () => {
+    await inPlay();
+    await lose(PAUSED);
+    vi.advanceTimersByTime(10_000);
+    await vi.waitFor(() => expect(text()).toContain(STUCK));
+    expectNoErrorScreen();
+    expect(logged).not.toHaveBeenCalled();
+  }, 60_000);
+});
+
 describe('battle choice across a reload (#218)', () => {
   const dusk: BattleChoice = { ...DEFAULT_CHOICE, side: 'veros', time: 'dusk' };
 

@@ -30,6 +30,7 @@ import { Pinch } from '../../input/pinch';
 import { watchViewport } from '../../core/viewport';
 
 const STICK_RADIUS = { S: 46, M: 56, L: 70 } as const;
+const CONTEXT_STUCK_MS = 10_000;
 
 interface FlightProps { session: FlightSession; touch: boolean; settings?: Settings; onSettings?: (s: Settings) => void; onExit: () => void; children?: ReactNode; onRenderer?: (r: FlightRenderer | null) => void }
 
@@ -48,6 +49,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const [showKeys, setShowKeys] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [portrait, setPortrait] = useState(false);
+  const [glContext, setGlContext] = useState<'ok' | 'lost' | 'stuck'>('ok');
+  const contextLost = glContext !== 'ok';
   const sim = session.world;
   sim.difficulty = DIFFICULTIES[settings.difficulty];
   sim.assists.autoIdentify = settings.assists.autoIdentify;
@@ -160,8 +163,16 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   }, [hud]);
 
   useEffect(() => {
-    session.paused = help && snap.mode === 'play';
-  }, [session, help, snap.mode]);
+    session.paused = (help || contextLost) && snap.mode === 'play';
+  }, [session, help, contextLost, snap.mode]);
+
+  useEffect(() => {
+    if (!contextLost) return;
+    if (document.pointerLockElement) document.exitPointerLock();
+    input.releaseMouse();
+    const id = setTimeout(() => setGlContext('stuck'), CONTEXT_STUCK_MS);
+    return () => clearTimeout(id);
+  }, [contextLost, input]);
 
   useEffect(() => {
     const check = () => setPortrait(touchRef.current && window.innerHeight > window.innerWidth);
@@ -182,6 +193,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       session,
       input,
       onCrash: raise,
+      onContextLost: () => setGlContext('lost'),
+      onContextRestored: () => setGlContext('ok'),
       onFrame: ({ simDt, cockpit, agl }) => {
         if (paceRef.current) paceRef.current.textContent = paceLabel(rendererRef.current?.paceRatio ?? null);
         const h = sim.player, tp = sim.target;
@@ -440,6 +453,18 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
         </div>
       )}
       {children}
+      {contextLost && snap.mode !== 'done' && (
+        <div className="overlay">
+          <div className="card" role="alert">
+            <p className="sub">{t(glContext === 'stuck' ? 'flight.contextLost.stuck' : snap.mode === 'play' || (snap.mode === 'deploy' && session.frozen) ? 'flight.contextLost.paused' : 'flight.contextLost.running')}</p>
+            {glContext === 'stuck' && (
+              <div className="pause-buttons">
+                <button className="go" onClick={() => window.location.reload()}>{t('battle.matchError.retry')}</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
