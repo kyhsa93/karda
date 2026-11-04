@@ -61,6 +61,6 @@ export function App() {
       if (returning) return <BattleLoadBoundary><BattleCheck onReady={settled} /></BattleLoadBoundary>;
       return <BattleSetup choice={choice} settings={save.settings} onChoice={setChoice} onDifficulty={difficulty => setSave(prev => ({ ...prev, settings: { ...prev.settings, difficulty } }))} onDeploy={() => ui.go({ name: 'battle', map: choice.map, mode: choice.mode })} onBack={() => ui.go({ name: 'title' })} />;
     case 'battle':
-      return <BattleLoadBoundary><Suspense fallback={<Loading progress={1} />}><Battle choice={choice} touch={touch} settings={save.settings} onSettings={settings => setSave(prev => ({ ...prev, settings }))} onSetup={() => ui.go({ name: 'battleSetup' })} onTitle={() => ui.go({ name: 'title' })} tips={save.tips} onTip={id => setSave(prev => prev.tips.includes(id) ? prev : { ...prev, tips: [...prev.tips, id] })} /></Suspense></BattleLoadBoundary>;
+      return <BattleLoadBoundary><Suspense fallback={<Loading progress={1} />}><Battle choice={choice} touch={touch} settings={save.settings} onSettings={settings => setSave(prev => ({ ...prev, settings }))} onSetup={() => ui.go({ name: 'battleSetup' })} onTitle={() => ui.go({ name: 'title' })} tips={save.tips} onTip={id => setSave(prev => prev.tips.includes(id) ? prev : { ...prev, tips: [...prev.tips, id] })} lastRole={save.lastRole} onRole={role => setSave(prev => prev.lastRole === role ? prev : { ...prev, lastRole: role })} /></Suspense></BattleLoadBoundary>;
   }
 }
