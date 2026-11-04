@@ -27,6 +27,20 @@ describe('settings save', () => {
     expect(Object.keys(s)).toEqual(['version', 'settings', 'tips']);
   });
 
+  it('keeps the last sortie role in the same v1 save and ignores anything else there (#226)', () => {
+    const store = memoryStorage();
+    storeSave({ ...freshSave(), lastRole: 'heli' }, store);
+    expect(JSON.parse(store.getItem(SAVE_KEY)!).version).toBe(1);
+    expect(loadSave(store).lastRole).toBe('heli');
+    storeSave({ ...freshSave(), lastRole: 'soldier' }, store);
+    expect(loadSave(store).lastRole).toBe('soldier');
+    for (const bad of ['tank', 3, null]) {
+      store.setItem(SAVE_KEY, JSON.stringify({ version: 1, settings: {}, lastRole: bad }));
+      expect(Object.keys(loadSave(store))).toEqual(['version', 'settings', 'tips']);
+    }
+    expect(store.getItem(BACKUP_KEY)).toBeNull();
+  });
+
   it('moves unreadable data to the backup key and survives a broken storage', () => {
     const store = memoryStorage();
     store.setItem(SAVE_KEY, '{nope');

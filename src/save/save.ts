@@ -6,6 +6,7 @@ export const BACKUP_KEY = 'heli-campaign-backup';
 
 export type Quality = 'low' | 'medium' | 'high';
 export type StickSize = 'S' | 'M' | 'L';
+export type SortieRole = 'heli' | 'soldier';
 
 export interface Settings {
   difficulty: DifficultyLevel;
@@ -35,6 +36,7 @@ export interface GameSave {
   version: 1;
   settings: Settings;
   tips: string[];
+  lastRole?: SortieRole;
 }
 
 export function freshSave(): GameSave {
@@ -47,6 +49,7 @@ function sanitize(raw: unknown): GameSave | null {
   if (r.version !== 1) return null;
   const save = freshSave();
   if (Array.isArray(r.tips)) save.tips = r.tips.filter((x): x is string => typeof x === 'string').slice(0, 200);
+  if (r.lastRole === 'heli' || r.lastRole === 'soldier') save.lastRole = r.lastRole;
   const s = r.settings as Partial<Settings> | undefined;
   if (s) {
     if (isDifficulty(s.difficulty)) save.settings.difficulty = s.difficulty;

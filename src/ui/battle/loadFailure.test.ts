@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElement, Suspense, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { t } from '../../content/strings';
+import { SAVE_KEY } from '../../save/save';
 import { memoryStorage, type KeyValue } from '../../save/storage';
 import { BattleLoadBoundary } from './BattleLoadBoundary';
 import { DEFAULT_CHOICE, loadChoice, storeChoice, type BattleChoice } from './BattleSetup';
@@ -147,7 +148,7 @@ describe('battle chunk load failure (#218)', () => {
     dom = fakeDom('#/battle/harek/quick');
     vi.doMock('./loadBattle', () => ({ loadBattle }));
     const { Battle } = await vi.importActual<typeof import('./Battle')>('./Battle');
-    const props = { choice: { mode: 'quick', map: 'harek', side: 'coalition', time: 'day' }, touch: false, settings: {}, onSettings() {}, onSetup() {}, onTitle() {}, tips: [], onTip() {} } as unknown as Parameters<typeof Battle>[0];
+    const props = { choice: { mode: 'quick', map: 'harek', side: 'coalition', time: 'day' }, touch: false, settings: {}, onSettings() {}, onSetup() {}, onTitle() {}, tips: [], onTip() {}, onRole() {} } as unknown as Parameters<typeof Battle>[0];
     mount(createElement(BattleLoadBoundary, null, createElement(Suspense, null, createElement(Battle, props))));
     await expectErrorScreen();
   });
@@ -344,7 +345,7 @@ describe('play again (#265)', () => {
     });
     const { Battle } = await import('./Battle');
     const { defaultSettings } = await import('../../save/save');
-    const props = { choice: DEFAULT_CHOICE, touch: false, settings: defaultSettings(), onSettings() {}, onSetup() {}, onTitle() {}, tips: [], onTip() {} } as unknown as Parameters<typeof Battle>[0];
+    const props = { choice: DEFAULT_CHOICE, touch: false, settings: defaultSettings(), onSettings() {}, onSetup() {}, onTitle() {}, tips: [], onTip() {}, onRole() {} } as unknown as Parameters<typeof Battle>[0];
     root = createRoot(dom.container as unknown as HTMLElement);
     root.render(createElement(BattleLoadBoundary, null, createElement(Suspense, null, createElement(Battle, props))));
     await vi.waitFor(() => expect(renderers).toHaveLength(1), { timeout: 30_000 });
@@ -661,4 +662,115 @@ describe('battle choice across a reload (#218)', () => {
     expect(() => storeChoice(dusk, null)).not.toThrow();
     expect(loadChoice(null)).toEqual(DEFAULT_CHOICE);
   });
+});
+
+describe('the role offered after a match (#226)', () => {
+  const GO = t('battle.deploy.go');
+  const AGAIN = t('battle.report.again');
+  const SOLDIER = t('battle.roles.soldier');
+  const HELI = t('battle.roles.heli');
+  type Session = { mode: string; step: (dt: number) => void; objective: { conquest: { tickets: { veros: number } } } };
+  let root: Root | undefined;
+  let dom: ReturnType<typeof fakeDom>;
+  let renderers: { opts: { session: Session } }[];
+  let saved: ReturnType<typeof memoryStorage>;
+  let tab: ReturnType<typeof memoryStorage>;
+
+  const text = () => dom.container.textContent;
+  const button = (label: string) => buttons(dom.container).find(b => b.textContent.includes(label))!;
+  const role = () => [SOLDIER, HELI].filter(label => button(label)?.attrs.class === 'on');
+  const lastRole = () => JSON.parse(saved.getItem(SAVE_KEY)!).lastRole;
+  const inDeploy = async () => {
+    root?.unmount();
+    renderers = [];
+    dom = fakeDom('#/battle');
+    vi.stubGlobal('location', dom.location);
+    const { App } = await import('../../App');
+    root = createRoot(dom.container as unknown as HTMLElement);
+    root.render(createElement(App));
+    await vi.waitFor(() => expect(text()).toContain(DEPLOY));
+    press(button(DEPLOY));
+    await vi.waitFor(() => { expect(renderers).toHaveLength(1); expect(text()).toContain(GO); }, { timeout: 30_000 });
+  };
+  const playAndAgain = async () => {
+    const count = renderers.length;
+    const session = renderers.at(-1)!.opts.session;
+    press(button(GO));
+    await vi.waitFor(() => expect(session.mode).toBe('play'));
+    session.objective.conquest.tickets.veros = 0;
+    for (let i = 0; i < 2400 && session.mode !== 'done'; i++) session.step(1 / 120);
+    await vi.waitFor(() => expect(text()).toContain(AGAIN));
+    press(button(AGAIN));
+    await vi.waitFor(() => { expect(renderers).toHaveLength(count + 1); expect(text()).toContain(GO); }, { timeout: 30_000 });
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    saved = memoryStorage();
+    tab = memoryStorage();
+    vi.stubGlobal('localStorage', saved);
+    vi.stubGlobal('sessionStorage', tab);
+    vi.stubGlobal('requestAnimationFrame', (frame: () => void) => { setTimeout(frame); });
+    vi.doMock('../../assets/loader', () => ({ assets: { get: () => null, loadGroup: async () => ({ loaded: [], failed: [] }) } }));
+    vi.doMock('../../audio/game', () => ({ GameAudio: class { voice = { enabled: false }; setVolume() {} async loadSamples() {} async resume() {} dispose() {} } }));
+    vi.doMock('../../render/renderer', () => ({
+      FlightRenderer: class {
+        dispose = vi.fn();
+        constructor(public opts: { session: Session }) { renderers.push(this); }
+        applySettings() {}
+      },
+    }));
+    vi.doMock('./hud/BattleHud', () => ({ BattleHud: () => null }));
+  });
+
+  afterEach(() => {
+    root?.unmount();
+    root = undefined;
+    for (const m of ['../../assets/loader', '../../audio/game', '../../render/renderer', './hud/BattleHud']) vi.doUnmock(m);
+    vi.stubGlobal('localStorage', undefined);
+    vi.stubGlobal('sessionStorage', undefined);
+    vi.stubGlobal('requestAnimationFrame', undefined);
+    vi.stubGlobal('location', undefined);
+  });
+
+  it('stays on foot after a match on foot, on play again and on coming back', async () => {
+    await inDeploy();
+    expect(role()).toEqual([SOLDIER]);
+    await playAndAgain();
+    expect(role()).toEqual([SOLDIER]);
+    expect(lastRole()).toBe('soldier');
+    await inDeploy();
+    expect(role()).toEqual([SOLDIER]);
+  }, 120_000);
+
+  it('stays on the helicopter after a sortie in it, and follows the next sortie on foot', async () => {
+    await inDeploy();
+    press(button(HELI));
+    await vi.waitFor(() => expect(role()).toEqual([HELI]));
+    await playAndAgain();
+    expect(role()).toEqual([HELI]);
+    expect(lastRole()).toBe('heli');
+    await inDeploy();
+    expect(role()).toEqual([HELI]);
+    press(button(SOLDIER));
+    await vi.waitFor(() => expect(role()).toEqual([SOLDIER]));
+    await playAndAgain();
+    expect(role()).toEqual([SOLDIER]);
+    expect(lastRole()).toBe('soldier');
+  }, 180_000);
+
+  it('does not remember a role that was only looked at', async () => {
+    await inDeploy();
+    press(button(HELI));
+    await vi.waitFor(() => expect(role()).toEqual([HELI]));
+    await inDeploy();
+    expect(role()).toEqual([SOLDIER]);
+  }, 120_000);
+
+  it('offers the VPA on foot even when the last sortie was in the helicopter', async () => {
+    storeChoice({ ...DEFAULT_CHOICE, side: 'veros' }, tab);
+    saved.setItem(SAVE_KEY, JSON.stringify({ version: 1, settings: {}, tips: [], lastRole: 'heli' }));
+    await inDeploy();
+    expect(role()).toEqual([SOLDIER]);
+  }, 120_000);
 });

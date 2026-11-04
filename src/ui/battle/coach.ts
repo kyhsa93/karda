@@ -1,3 +1,5 @@
+import type { SortieRole } from '../../save/save';
+
 export const STEP_TIMEOUT = 20;
 export const MIN_SHOW = 3;
 
@@ -73,4 +75,8 @@ export function deathTip(reason: string | undefined, missile: boolean) {
 
 export function cardDevice(touch: boolean, pads: readonly ({ connected: boolean } | null)[]) {
   return touch ? 'touch' : pads.some(p => p?.connected) ? 'pad' : 'keyboard';
+}
+
+export function initialRole(side: 'coalition' | 'veros', lastRole: SortieRole | undefined): SortieRole {
+  return side === 'coalition' && lastRole === 'heli' ? 'heli' : 'soldier';
 }

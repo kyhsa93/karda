@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, COACH_STEPS, deathTip, MIN_SHOW, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
+import { cardDevice, Coach, COACH_STEPS, deathTip, initialRole, MIN_SHOW, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
 
 const base: CoachFacts = { agl: 60, tads: false, identified: 0, flips: 0, detected: 0, deaths: 0, playing: true, foot: false, walked: 0, shots: 0, inPoint: false };
@@ -83,5 +83,22 @@ describe('battle coach (wiki 8.10)', () => {
     expect(cardDevice(false, [null, { connected: true }])).toBe('pad');
     expect(cardDevice(false, [null, { connected: false }])).toBe('keyboard');
     for (const role of ['apache', 'soldier']) for (const d of ['keyboard', 'touch', 'pad']) expect(tList(`battle.card.${role}.${d}`)).toHaveLength(3);
+  });
+});
+
+describe('initial role on the deploy screen (#226)', () => {
+  it('starts on foot until a sortie says otherwise', () => {
+    expect(initialRole('coalition', undefined)).toBe('soldier');
+  });
+
+  it('keeps the role of the last sortie', () => {
+    expect(initialRole('coalition', 'soldier')).toBe('soldier');
+    expect(initialRole('coalition', 'heli')).toBe('heli');
+  });
+
+  it('stays on foot for the VPA, which has no helicopter to choose', () => {
+    expect(initialRole('veros', undefined)).toBe('soldier');
+    expect(initialRole('veros', 'soldier')).toBe('soldier');
+    expect(initialRole('veros', 'heli')).toBe('soldier');
   });
 });
