@@ -155,6 +155,22 @@ export class FlightInput {
 
   touchUsed = false;
 
+  releaseMouse() {
+    this.mouseFire = false;
+    this.mouseAds = false;
+  }
+
+  watchMouseRelease(win: EventTarget, doc: EventTarget, locked: () => boolean) {
+    const blur = () => this.releaseMouse();
+    const lockChange = () => { if (!locked()) this.releaseMouse(); };
+    win.addEventListener('blur', blur);
+    doc.addEventListener('pointerlockchange', lockChange);
+    return () => {
+      win.removeEventListener('blur', blur);
+      doc.removeEventListener('pointerlockchange', lockChange);
+    };
+  }
+
   private assist(world: World, dt: number, eligible: boolean) {
     this.assistNear = false;
     this.assistActive = false;
