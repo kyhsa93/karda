@@ -91,7 +91,7 @@ describe('pausing stops visual time (#269)', () => {
     const mount = { clientWidth: 640, clientHeight: 360, appendChild() {} } as unknown as HTMLElement;
     renderer = new FlightRenderer({ mount, overlay, session, input, onCrash: e => { throw e; }, onFrame: f => frames.push(f) });
     renderer.audio = { update: (s: (typeof audio)[number]) => audio.push(s), onEvent() {} } as unknown as GameAudio;
-    clock = performance.now();
+    clock = Math.ceil(performance.now());
     run(2);
     fireUntilBothLayersLive();
   }, 60_000);
