@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import harekRaw from '../content/battle/maps/harek.json?raw';
+import flightSource from '../ui/screens/Flight.tsx?raw';
 import { createBattleSession } from '../sim/battle/runtime';
 import type { BattleMapDef } from '../sim/battle/schema';
 import { STEP, World } from '../sim/world';
@@ -181,21 +182,21 @@ describe('soldier aim assist and gamepad (B2-11)', () => {
   });
 });
 
+const harek = JSON.parse(harekRaw) as BattleMapDef;
+
+function fighter(seed: number) {
+  const { session } = createBattleSession(harek, 'quick', { side: 'coalition', seed });
+  session.start();
+  const base = harek.bases[0].position;
+  session.deploy({ kind: 'soldier', x: base[0] + 30, z: base[1] - 30, headingDeg: 0, cls: 'assault' });
+  const world = session.world, input = new FlightInput();
+  input.gamepads = () => [];
+  const mag = () => world.soldierArms.ammo[world.soldierArms.selected]!.mag;
+  const run = (seconds: number) => { for (let i = 0; i < seconds * 120; i++) { input.update(world, STEP); session.step(STEP); } };
+  return { world, input, mag, run };
+}
+
 describe('mouse buttons on focus loss (#267)', () => {
-  const harek = JSON.parse(harekRaw) as BattleMapDef;
-
-  function fighter(seed: number) {
-    const { session } = createBattleSession(harek, 'quick', { side: 'coalition', seed });
-    session.start();
-    const base = harek.bases[0].position;
-    session.deploy({ kind: 'soldier', x: base[0] + 30, z: base[1] - 30, headingDeg: 0, cls: 'assault' });
-    const world = session.world, input = new FlightInput();
-    input.gamepads = () => [];
-    const mag = () => world.soldierArms.ammo[world.soldierArms.selected]!.mag;
-    const run = (seconds: number) => { for (let i = 0; i < seconds * 120; i++) { input.update(world, STEP); session.step(STEP); } };
-    return { world, input, mag, run };
-  }
-
   function watched(seed: number) {
     const f = fighter(seed), win = new EventTarget(), doc = new EventTarget(), lock = { held: true };
     const stop = f.input.watchMouseRelease(win, doc, () => lock.held);
@@ -254,5 +255,189 @@ describe('mouse buttons on focus loss (#267)', () => {
     f.input.mouseFire = true;
     f.win.dispatchEvent(new Event('blur'));
     expect(f.input.mouseFire).toBe(true);
+    f.lock.held = false;
+    f.doc.dispatchEvent(new Event('pointerlockchange'));
+    expect(f.input.mouseFire).toBe(true);
+  });
+});
+
+describe('chorded mouse buttons (#282)', () => {
+  const BIT = { L: 1, R: 2, M: 4 } as const;
+  type Button = keyof typeof BIT;
+
+  function mouse(input: FlightInput, armed = () => true) {
+    let held = 0;
+    const send = (type: string) => input.mouseEvent({ type, pointerType: 'mouse', buttons: held }, armed());
+    return {
+      down(b: Button) { const first = held === 0; held |= BIT[b]; send(first ? 'pointerdown' : 'pointermove'); },
+      up(b: Button) { held &= ~BIT[b]; send(held === 0 ? 'pointerup' : 'pointermove'); },
+      move() { send('pointermove'); },
+      forget() { held = 0; },
+    };
+  }
+
+  const flags = (i: FlightInput) => [i.mouseFire, i.mouseAds];
+  const orders: [string, [Button, boolean, boolean[]][]][] = [
+    ['right, left, left up, right up', [['R', true, [false, true]], ['L', true, [true, true]], ['L', false, [false, true]], ['R', false, [false, false]]]],
+    ['right, left, right up, left up', [['R', true, [false, true]], ['L', true, [true, true]], ['R', false, [true, false]], ['L', false, [false, false]]]],
+    ['left, right, left up, right up', [['L', true, [true, false]], ['R', true, [true, true]], ['L', false, [false, true]], ['R', false, [false, false]]]],
+    ['left, right, right up, left up', [['L', true, [true, false]], ['R', true, [true, true]], ['R', false, [true, false]], ['L', false, [false, false]]]],
+  ];
+
+  it.each(orders)('%s matches the held buttons at every step', (_, steps) => {
+    const input = new FlightInput(), m = mouse(input);
+    for (const [b, press, want] of steps) {
+      if (press) m.down(b); else m.up(b);
+      expect(flags(input)).toEqual(want);
+      m.move();
+      expect(flags(input)).toEqual(want);
+    }
+  });
+
+  describe.each([1, 2])('seed %i', seed => {
+    it('fires while the aim button is held', () => {
+      const f = fighter(seed), m = mouse(f.input);
+      f.run(0.1);
+      m.down('R');
+      f.run(0.2);
+      const full = f.mag();
+      expect(f.world.soldierCommands).toMatchObject({ fire: false, ads: true });
+      m.down('L');
+      f.run(0.5);
+      expect(f.world.soldierCommands).toMatchObject({ fire: true, ads: true });
+      expect(f.mag()).toBeLessThan(full);
+    });
+
+    it('aims while the fire button is held', () => {
+      const f = fighter(seed), m = mouse(f.input);
+      f.run(0.1);
+      m.down('L');
+      f.run(0.2);
+      expect(f.world.soldierCommands).toMatchObject({ fire: true, ads: false });
+      const firing = f.mag();
+      m.down('R');
+      f.run(0.5);
+      expect(f.world.soldierCommands).toMatchObject({ fire: true, ads: true });
+      expect(f.mag()).toBeLessThan(firing);
+    });
+
+    it('stops firing once every button is up', () => {
+      const f = fighter(seed), m = mouse(f.input);
+      f.run(0.1);
+      m.down('L'); m.down('R'); m.up('L'); m.up('R');
+      f.run(0.1);
+      const mag = f.mag(), shots = f.world.soldierArms.shots;
+      f.run(1);
+      expect(f.world.soldierCommands).toMatchObject({ fire: false, ads: false });
+      expect(f.mag()).toBe(mag);
+      expect(f.world.soldierArms.shots).toBe(shots);
+    });
+
+    it('fires a single button at the same rate as a held flag', () => {
+      const plain = fighter(seed), held = fighter(seed), m = mouse(held.input);
+      plain.run(0.1); held.run(0.1);
+      plain.input.mouseFire = true;
+      m.down('L');
+      for (let i = 0; i < 20; i++) { plain.run(0.1); held.run(0.1); m.move(); }
+      expect(held.world.soldierArms.shots).toBeGreaterThan(0);
+      expect(held.world.soldierArms.shots).toBe(plain.world.soldierArms.shots);
+    });
+  });
+
+  it('does not fire from the click that took the lock', () => {
+    const input = new FlightInput(), lock = { held: false }, m = mouse(input, () => lock.held);
+    m.down('L');
+    lock.held = true;
+    m.move();
+    expect(flags(input)).toEqual([false, false]);
+    m.down('R');
+    expect(flags(input)).toEqual([false, true]);
+    m.up('L');
+    m.up('R');
+    expect(flags(input)).toEqual([false, false]);
+    m.down('L');
+    expect(flags(input)).toEqual([true, false]);
+  });
+
+  it('stays released after blur or a mode change until the button is pressed again', () => {
+    const input = new FlightInput(), m = mouse(input);
+    m.down('L');
+    m.down('R');
+    input.releaseMouse();
+    m.move();
+    expect(flags(input)).toEqual([false, false]);
+    m.up('R');
+    m.down('R');
+    expect(flags(input)).toEqual([false, true]);
+    m.up('R');
+    m.up('L');
+    m.down('L');
+    expect(flags(input)).toEqual([true, false]);
+  });
+
+  it('takes a press after the release happened out of sight', () => {
+    const input = new FlightInput(), m = mouse(input);
+    m.down('L');
+    input.releaseMouse();
+    m.forget();
+    m.down('L');
+    expect(flags(input)).toEqual([true, false]);
+  });
+
+  it('ignores presses while the lock is gone but still lets go', () => {
+    const input = new FlightInput(), lock = { held: true }, m = mouse(input, () => lock.held);
+    m.down('L');
+    m.down('R');
+    lock.held = false;
+    m.up('L');
+    expect(flags(input)).toEqual([false, true]);
+    m.down('L');
+    expect(flags(input)).toEqual([false, true]);
+    m.up('L');
+    m.up('R');
+    expect(flags(input)).toEqual([false, false]);
+    m.down('R');
+    expect(flags(input)).toEqual([false, false]);
+  });
+
+  it('ignores other buttons', () => {
+    const input = new FlightInput(), m = mouse(input);
+    m.down('M');
+    expect(flags(input)).toEqual([false, false]);
+    m.down('L');
+    expect(flags(input)).toEqual([true, false]);
+    m.up('M');
+    expect(flags(input)).toEqual([true, false]);
+  });
+
+  it('ignores touch pointers', () => {
+    const input = new FlightInput(), m = mouse(input);
+    input.mouseEvent({ type: 'pointerdown', pointerType: 'touch', buttons: 1 }, true);
+    input.mouseEvent({ type: 'pointermove', pointerType: 'touch', buttons: 1 }, true);
+    expect(flags(input)).toEqual([false, false]);
+    m.down('L');
+    input.mouseEvent({ type: 'pointerup', pointerType: 'touch', buttons: 0 }, true);
+    expect(flags(input)).toEqual([true, false]);
+  });
+
+  describe('Flight.tsx wiring', () => {
+    const body = (name: string) => {
+      const start = flightSource.indexOf(`const ${name} = `);
+      expect(start).toBeGreaterThan(-1);
+      return flightSource.slice(start, flightSource.indexOf('\n  };', start));
+    };
+
+    it.each(['onPointerDown', 'onPointerMove', 'onPointerUp'])('%s reports every event to the input layer', name => {
+      expect(body(name).split('\n')[1]).toMatch(/^\s*input\.mouseEvent\(e, armed\(\)\);$/);
+      expect(flightSource).toContain(`${name}={${name}}`);
+    });
+
+    it('arms only a held lock that the role wants', () => {
+      expect(flightSource).toContain('const armed = () => locked() && wantsPointerLock(roleOf(sim), touch);');
+    });
+
+    it('keeps the release watcher and hands back its cleanup', () => {
+      expect(flightSource).toContain('useEffect(() => input.watchMouseRelease(window, document, locked), [input]);');
+    });
   });
 });
