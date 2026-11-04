@@ -6,7 +6,7 @@ import type { BattleMapDef } from '../sim/battle/schema';
 import { FlightRenderer } from './renderer';
 
 const calls: string[] = [];
-const gl = { lost: false };
+const gl = { lost: false, asyncLoss: false };
 
 vi.mock('three', async original => {
   const three = await original<typeof import('three')>();
@@ -18,7 +18,9 @@ vi.mock('three', async original => {
     dispose = () => { calls.push('dispose'); };
     forceContextLoss = () => {
       calls.push('forceContextLoss');
-      for (const fn of this.domElement.lostListeners) fn();
+      const fire = () => { for (const fn of this.domElement.listeners.webglcontextlost) fn(); };
+      if (gl.asyncLoss) queueMicrotask(fire);
+      else fire();
     };
     constructor() {
       return new Proxy(this, { get: (o, k) => (k in o ? o[k as keyof typeof o] : () => {}) });
@@ -41,13 +43,14 @@ function fakeCanvas() {
 }
 
 function glCanvas() {
-  const lostListeners = new Set<() => void>();
+  const listeners = { webglcontextlost: new Set<() => void>(), webglcontextrestored: new Set<() => void>() };
+  type Kind = keyof typeof listeners;
   return {
     ...fakeCanvas(),
-    lostListeners,
+    listeners,
     remove() { calls.push('remove'); },
-    addEventListener(type: string, fn: () => void) { if (type === 'webglcontextlost') lostListeners.add(fn); },
-    removeEventListener(type: string, fn: () => void) { if (type === 'webglcontextlost') lostListeners.delete(fn); },
+    addEventListener(type: string, fn: () => void) { listeners[type as Kind]?.add(fn); },
+    removeEventListener(type: string, fn: () => void) { listeners[type as Kind]?.delete(fn); },
   };
 }
 
@@ -55,21 +58,28 @@ const harek = JSON.parse(harekRaw) as BattleMapDef;
 
 describe('disposing the renderer (#266)', () => {
   let crashes: unknown[];
+  let context: string[];
   let renderer: FlightRenderer;
+  let scheduled: FrameRequestCallback[];
+  const canvas = () => (renderer as unknown as { renderer: { domElement: ReturnType<typeof glCanvas> } }).renderer.domElement;
+  const fire = (type: 'webglcontextlost' | 'webglcontextrestored') => { for (const fn of canvas().listeners[type]) fn(); };
 
   beforeEach(() => {
     calls.length = 0;
     gl.lost = false;
+    gl.asyncLoss = false;
     crashes = [];
+    context = [];
+    scheduled = [];
     vi.stubGlobal('window', { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {}, scrollTo() {} });
     vi.stubGlobal('document', { createElement: fakeCanvas, createElementNS: fakeCanvas });
-    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('requestAnimationFrame', (fn: FrameRequestCallback) => scheduled.push(fn));
     vi.stubGlobal('cancelAnimationFrame', () => {});
     const { session } = createBattleSession(harek, 'quick', { side: 'coalition', seed: 1 });
     session.start();
     const overlay = fakeCanvas() as unknown as HTMLCanvasElement;
     const mount = { clientWidth: 640, clientHeight: 360, appendChild() {} } as unknown as HTMLElement;
-    renderer = new FlightRenderer({ mount, overlay, session, input: new FlightInput(), onCrash: e => crashes.push(e) });
+    renderer = new FlightRenderer({ mount, overlay, session, input: new FlightInput(), onCrash: e => crashes.push(e), onContextLost: () => context.push('lost'), onContextRestored: () => context.push('restored') });
   }, 60_000);
 
   afterEach(() => {
@@ -90,5 +100,28 @@ describe('disposing the renderer (#266)', () => {
     gl.lost = true;
     renderer.dispose();
     expect(calls).toEqual(['dispose', 'remove']);
+  });
+
+  it('reports a real context loss and its restoration, without a crash (#268)', () => {
+    fire('webglcontextlost');
+    expect(context).toEqual(['lost']);
+    fire('webglcontextrestored');
+    expect(context).toEqual(['lost', 'restored']);
+    expect(crashes).toEqual([]);
+  });
+
+  it('drops its listeners before causing a loss whose event comes at once (#268)', () => {
+    renderer.dispose();
+    expect(context).toEqual([]);
+    expect(canvas().listeners.webglcontextlost.size).toBe(0);
+    expect(canvas().listeners.webglcontextrestored.size).toBe(0);
+  });
+
+  it('does not report its own loss when the event arrives after dispose has returned (#268)', async () => {
+    gl.asyncLoss = true;
+    renderer.dispose();
+    await new Promise<void>(done => queueMicrotask(done));
+    expect(calls).toContain('forceContextLoss');
+    expect(context).toEqual([]);
   });
 });

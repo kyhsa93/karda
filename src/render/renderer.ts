@@ -54,6 +54,8 @@ export interface RendererOptions {
   input: FlightInput;
   onFrame?: (info: FrameInfo) => void;
   onCrash: (error: unknown) => void;
+  onContextLost?: () => void;
+  onContextRestored?: () => void;
 }
 
 export const OVERVIEW_AGL = 180;
@@ -113,6 +115,8 @@ export class FlightRenderer {
   private black = new THREE.Color(0x000000);
   private unitAssetsRequested = false;
   private offEvents: () => void;
+  private contextLost = () => this.opts.onContextLost?.();
+  private contextRestored = () => this.opts.onContextRestored?.();
 
   constructor(private opts: RendererOptions) {
     const { mount, overlay, session } = opts;
@@ -120,6 +124,8 @@ export class FlightRenderer {
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.renderer.info.autoReset = false;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.domElement.addEventListener('webglcontextlost', this.contextLost);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.contextRestored);
     mount.appendChild(this.renderer.domElement);
 
     this.scene = buildWorld(session.world.terrain, assets.get<THREE.Texture>('tex.ground_detail') ?? null);
@@ -456,6 +462,8 @@ export class FlightRenderer {
   }
 
   dispose() {
+    this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLost);
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.contextRestored);
     this.viewmodel.dispose();
     cancelAnimationFrame(this.raf);
     this.tads.dispose();
