@@ -12,6 +12,7 @@ import type { Unit } from '../../../sim/units';
 import { shadeTerrain } from './minimap';
 import { COLORS, pointColor, pointSymbol, sideSymbol } from './symbols';
 import { INFANTRY_WEAPONS } from '../../../sim/infantry/arms';
+import { radioLine, type DeathReport } from '../deathReport';
 
 type Side = 'coalition' | 'veros';
 
@@ -47,7 +48,7 @@ function unitName(u: { defId: string; side: string }) {
 
 export const OVERVIEW_BACK = 400;
 
-export function BattleHud({ session, runtime, side, renderer, touch }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean }) {
+export function BattleHud({ session, runtime, side, renderer, touch, death }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean; death: DeathReport }) {
   const world = session.world;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [, setTick] = useState(0);
@@ -221,6 +222,7 @@ export function BattleHud({ session, runtime, side, renderer, touch }: { session
   const now = world.time;
   const lines = feed.current.filter(f => f.until > now);
   const total = Math.max(1, own + enemy);
+  const radioText = radioLine(session.mode, death.line(), radio.current, now);
   if (session.mode !== 'play' && session.mode !== 'crashed') return <canvas ref={canvasRef} className="battle-canvas" />;
   return (
     <>
@@ -238,7 +240,7 @@ export function BattleHud({ session, runtime, side, renderer, touch }: { session
           </div>
         </div>
         <div className="killfeed">{lines.map((l, i) => <div key={i} className={l.mine ? 'mine' : ''}>{l.text}</div>)}</div>
-        {radio.current && radio.current.until > now && <div className="battle-radio">{radio.current.text}</div>}
+        {radioText && <div className="battle-radio">{radioText}</div>}
         {world.avatar.kind === 'soldier' && world.soldier && (() => {
           const s = world.soldier, a = world.soldierArms, m = a.ammo[a.selected]!, g = a.ammo.grenade ?? a.ammo.at_rocket, gear = world.soldierGear;
           const medkit = gear.medkit ? t('battle.hud.medkitActive', { n: Math.ceil(gear.medkit.until - world.time) }) : world.time < gear.readyAt ? t('battle.hud.medkitWait', { n: Math.ceil(gear.readyAt - world.time) }) : t('battle.hud.medkitReady');
