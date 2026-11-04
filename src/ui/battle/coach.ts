@@ -66,6 +66,7 @@ export const DEATH_TIPS: Record<string, string> = {
 };
 
 export function deathTip(reason: string | undefined, missile: boolean) {
+  if (reason === 'killed') return 'battle.tips.soldier';
   if (missile) return 'battle.tips.missile';
   return (reason && DEATH_TIPS[reason]) || 'battle.tips.fire';
 }
