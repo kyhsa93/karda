@@ -231,6 +231,7 @@ export class FlightRenderer {
     this.acc = acc;
     for (let i = 0; i < steps; i++) session.step(STEP);
     this.pace?.record(now, steps);
+    const simDt = session.paused ? 0 : steps * STEP;
     const h = world.player, c = world.controls, model = this.model, scn = this.scene, camera = this.camera;
 
     model.root.position.copy(h.pos);
@@ -336,9 +337,9 @@ export class FlightRenderer {
     if (world.units.length && !this.unitAssetsRequested) this.loadUnitModels();
     const tads = world.tads.active && h.alive && !this.debugCamera;
     const flir = tads && world.tads.sensor === 'flir';
-    this.units.update(world, flir, { pos: this.camera.getWorldPosition(this.tmp2), fovDeg: tads ? tadsFovDeg(world.tads) : this.camera.fov }, steps * STEP);
+    this.units.update(world, flir, { pos: this.camera.getWorldPosition(this.tmp2), fovDeg: tads ? tadsFovDeg(world.tads) : this.camera.fov }, simDt);
     this.searchlights.update(world);
-    this.effects.update(steps * STEP, world);
+    if (!session.paused) this.effects.update(simDt, world);
     if (!tads && this.mpdVideo && this.instruments.shows('TADS') && now - this.mpdVideoAt >= MPD_TADS_MS && h.alive) {
       this.mpdVideoAt = now;
       this.renderMpdTads(now, world.tads.sensor === 'flir');
@@ -384,10 +385,10 @@ export class FlightRenderer {
       ir: h.alive && world.arms.selected === 'stinger' ? (world.stinger.locked ? 'lock' : world.stinger.unitId !== null ? 'seek' : 'none') : 'none',
       rwr: h.alive && session.mode === 'play' ? rwrLevel(aseThreats(world)) : 'none',
       fuel: h.fuel, aglFt: agl * M_TO_FT, vsFpm: h.vel.y * MS_TO_FPM, flying: h.alive && !h.landed && session.mode === 'play',
-      soldier: soldier?.alive && session.mode === 'play' ? { dt: steps * STEP, speed: Math.hypot(soldier.vel.x, soldier.vel.z), stance: soldier.stance, onGround: soldier.onGround, reloading: world.soldierArms.reloading > 0 } : null,
+      soldier: soldier?.alive && session.mode === 'play' ? { dt: simDt, speed: Math.hypot(soldier.vel.x, soldier.vel.z), stance: soldier.stance, onGround: soldier.onGround, reloading: world.soldierArms.reloading > 0 } : null,
     });
 
-    this.opts.onFrame?.({ simDt: steps * STEP, cockpit, agl });
+    this.opts.onFrame?.({ simDt, cockpit, agl });
   }
 
   get mpd() { return this.instruments.mpd; }
