@@ -436,13 +436,13 @@ export class FlightRenderer {
 
   private renderPnvs(now: number) {
     const world = this.opts.session.world;
-    this.units.update(world, true);
+    this.units.update(world, true, undefined, 0);
     this.sensorPass(true, world.conditions.fog ? 600 : 1200, world.conditions.fog ? FOG_FLIR_RANGE : 4500, () => {
       this.pnvsView.follow(this.camera);
       this.scene.sky.position.copy(this.pnvsView.camera.position);
       this.pnvsView.renderImage(this.renderer, this.scene.scene, true, now * 0.001, null, world.player.damage.sensors <= DAMAGED ? 0.3 : 0.1, PNVS_OVERLAY);
     });
-    this.units.update(world, false);
+    this.units.update(world, false, undefined, 0);
   }
 
   private sensorPass(flir: boolean, near: number, far: number, draw: () => void) {
