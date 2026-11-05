@@ -22,8 +22,6 @@ export function eventMessage(e: SimEvent): Omit<Message, 'life'> | null {
     case 'zone': return e.inside ? { text: t('msg.zoneIn'), color: '#06d6a0' } : { text: t('msg.zoneOut', { s: Math.ceil(e.seconds) }), color: '#ef476f' };
     case 'advice':
       return { text: t(`advice.${e.code}`, { fpm: Math.round(e.value ?? 0), max: 500 }), color: '#ffd166' };
-    case 'objective':
-      return e.state === 'done' ? { text: t('msg.objectiveDone'), color: '#06d6a0' } : { text: t('msg.objectiveFailed'), color: '#ef476f' };
     case 'missileLost':
       return e.owner === 0 ? { text: t(`msg.missileLost.${e.reason}`), color: '#ef476f' } : null;
     case 'identified':
@@ -35,7 +33,7 @@ export function eventMessage(e: SimEvent): Omit<Message, 'life'> | null {
       return { text: t(`msg.fcr.${e.state}`, { n: e.count, mode: t(`msg.fcr.${e.mode}`) }), color: e.state === 'scan' ? '#ffd166' : '#4cc9f0' };
     case 'farp':
       return { text: t(`msg.farp.${e.state}`), color: e.state === 'cancelled' ? '#ef476f' : '#4cc9f0' };
-    case 'pointOwner': case 'battleEnd': case 'memberHit': case 'spotted': return null;
+    case 'objective': case 'pointOwner': case 'battleEnd': case 'memberHit': case 'spotted': return null;
     case 'crash': case 'unitDestroyed': case 'explosion': case 'fire': case 'impact': return null;
   }
 }

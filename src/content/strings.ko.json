@@ -27,8 +27,6 @@
     "landed": "착륙",
     "refuel": "연료 보급 중",
     "boundary": "작전 구역 경계입니다",
-    "objectiveDone": "목표 달성!",
-    "objectiveFailed": "목표 실패",
     "identified": "식별: {name} · {side}",
     "missileLost": {
       "spotLost": "레이저가 끊겨 미사일이 유도를 잃었습니다",
