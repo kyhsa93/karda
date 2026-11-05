@@ -62,7 +62,7 @@ export function BattleSetup({ choice, settings, onChoice, onDifficulty, onDeploy
     ['time', <Pick value={choice.time} options={TIMES} ready={TIMES} label={v => t(`battle.times.${v}`)} onPick={time => set({ time })} />],
   ];
   return (
-    <div className="menu">
+    <div className="menu setup">
       <div className="card wide battle-setup">
         <h1>{t('battle.setup.title')}</h1>
         <div className="settings">
