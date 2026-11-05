@@ -192,7 +192,8 @@ button.mode:disabled { opacity: .45; cursor: default; }
 .flight3d.touch .hud3d { left: calc(72px + env(safe-area-inset-left)); }
 .tcol { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; max-width: 150px; }
 @media (pointer: coarse) {
-  .choice button, .setting-row .choice button, .farp-menu button, button.go { min-height: 48px; min-width: 48px; }
+  .choice button, .setting-row .choice button, button.go { min-height: 48px; min-width: 48px; }
+  .farp-menu button { min-height: 44px; min-width: 44px; }
   .pylon { min-height: 64px; }
 }
 .choice button small { margin-left: 6px; font-size: 12px; opacity: .75; }
@@ -240,7 +241,7 @@ button.mode:disabled { opacity: .45; cursor: default; }
   .battle-setup .pause-buttons { position: sticky; bottom: 0; background: linear-gradient(transparent, rgba(11, 19, 32, .92) 30%); padding-top: 8px; margin-bottom: 0; }
 }
 @media (max-height: 480px) and (pointer: coarse) {
-  .battle-setup .setting-row { padding: 1px 0; }
+  .overlay.deploy .setting-row, .battle-setup .setting-row { padding: 1px 0; }
 }
 .battle-hud .soldier-status { position: absolute; right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
   background: rgba(6, 12, 22, .6); border-radius: 8px; padding: 6px 12px; font-variant-numeric: tabular-nums; }
