@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, deathTip, inCapturablePoint, initialRole, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
+import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
 import { SOLDIER_COMMANDS } from '../../input/roles';
 import type { Command } from '../../input/bindings';
@@ -369,8 +369,9 @@ describe('coach over a point mark (#295)', () => {
   });
 
   it.each([
-    ['667x375 helicopter first view', 333.5, 158.8, 66, true],
-    ['844x390 helicopter first view, bottom edge', 422, 165.2, 66, true],
+    ['667x375 helicopter first view, 9.2px over', 333.5, 158.8, 66, true],
+    ['844x390 helicopter first view, 2.8px over', 422, 165.2, 66, false],
+    ['932x430 helicopter with the head down, 4.0px over', 466, 164, 66, false],
     ['932x430 helicopter first view', 466, 182.1, 66, false],
     ['667x375 soldier facing D', 333.5, 136.1, 64, true],
     ['844x390 soldier facing D', 422, 141.6, 64, true],
@@ -384,6 +385,19 @@ describe('coach over a point mark (#295)', () => {
     const away = pointMarkBox(100, 300, 60);
     expect(coachDimmed(COACH, board([away, pointMarkBox(400, 140, 60)]), 1000)).toBe(true);
     expect(coachDimmed(COACH, board([{ left: 480, right: 540, top: 120, bottom: 136 }, { left: 300, right: 360, top: 160, bottom: 176 }]), 1000)).toBe(false);
+  });
+
+  it('dims only when the overlap reaches 5px both ways', () => {
+    const dims = (mark: Box) => coachDimmed(COACH, board([mark]), 1000);
+    expect(MARK_OVERLAP_MIN_PX).toBe(5);
+    expect(dims({ left: 300, right: 360, top: 155.01, bottom: 171.01 })).toBe(false);
+    expect(dims({ left: 300, right: 360, top: 155, bottom: 171 })).toBe(true);
+    expect(dims({ left: 300, right: 360, top: 104, bottom: 120 })).toBe(false);
+    expect(dims({ left: 300, right: 360, top: 105, bottom: 121 })).toBe(true);
+    expect(dims({ left: 476, right: 540, top: 130, bottom: 146 })).toBe(false);
+    expect(dims({ left: 475, right: 540, top: 130, bottom: 146 })).toBe(true);
+    expect(dims({ left: 230, right: 294, top: 130, bottom: 146 })).toBe(false);
+    expect(dims({ left: 230, right: 295, top: 130, bottom: 146 })).toBe(true);
   });
 
   it('stays plain with no marks, no coach or nothing published yet', () => {
@@ -416,8 +430,6 @@ describe('coach over a point mark (#295)', () => {
     const coach = css.match(/\.coach \{[^}]*\}/)![0];
     expect(coach).toMatch(/pointer-events: none;/);
     expect(coach).toMatch(/transition: opacity 150ms;/);
-    const opacity = Number(css.match(/\.coach\.dimmed \{ opacity: ([\d.]+); \}/)?.[1]);
-    expect(opacity).toBeGreaterThan(0);
-    expect(opacity).toBeLessThan(1);
+    expect(css).toMatch(/\.coach\.dimmed \{ opacity: \.5; \}/);
   });
 });

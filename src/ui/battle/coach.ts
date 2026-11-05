@@ -66,6 +66,7 @@ export class Coach {
 export const MARK_FONT_PX = 13;
 export const MARK_BORDER_PX = 3;
 export const MARK_STALE_MS = 1000;
+export const MARK_OVERLAP_MIN_PX = 5;
 
 export interface Box { left: number; right: number; top: number; bottom: number }
 
@@ -91,7 +92,9 @@ export class PointMarkBoard {
 
 export function coachDimmed(coach: Box | null | undefined, marks: PointMarkBoard, now: number) {
   if (!coach || now - marks.at > MARK_STALE_MS) return false;
-  return marks.boxes.some(m => m.left < coach.right && m.right > coach.left && m.top < coach.bottom && m.bottom > coach.top);
+  return marks.boxes.some(m =>
+    Math.min(m.right, coach.right) - Math.max(m.left, coach.left) >= MARK_OVERLAP_MIN_PX
+    && Math.min(m.bottom, coach.bottom) - Math.max(m.top, coach.top) >= MARK_OVERLAP_MIN_PX);
 }
 
 export const DEATH_TIPS: Record<string, string> = {
