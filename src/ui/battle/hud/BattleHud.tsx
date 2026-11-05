@@ -13,7 +13,8 @@ import { CaptureMarks, drawRing, markText, markTextY, RING_LABEL_GAP } from './c
 import { shadeTerrain } from './minimap';
 import { COLORS, pointColor, pointSymbol, sideSymbol } from './symbols';
 import { INFANTRY_WEAPONS } from '../../../sim/infantry/arms';
-import { pointMarkBox, type Box, type PointMarkBoard } from '../coach';
+import { clearOf, pointMarkBox, type Box, type PointMarkBoard } from '../coach';
+import { statusLines } from './soldierStatus';
 import { radioLine, type DeathReport } from '../deathReport';
 
 type Side = 'coalition' | 'veros';
@@ -53,6 +54,7 @@ export const OVERVIEW_BACK = 400;
 export function BattleHud({ session, runtime, side, renderer, touch, death, marks: pointMarks }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean; death: DeathReport; marks: PointMarkBoard }) {
   const world = session.world;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
   const feed = useRef<{ text: string; mine: boolean; until: number }[]>([]);
   const radio = useRef<{ text: string; until: number } | null>(null);
@@ -142,6 +144,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
           return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, front: v.z < 1 };
         };
         const boxes: Box[] = [];
+        const panel = statusRef.current?.getBoundingClientRect() ?? null;
         for (const p of runtime.conquest.points) {
           const s = project(p.x, world.terrain.surfaceAt(p.x, p.z) + 16, p.z);
           const edge = 48;
@@ -155,6 +158,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
           const symbol = pointSymbol(p.owner, p.contested), mark = marks.of(p, world.time);
           const text = `${symbol}${mark ? RING_LABEL_GAP : ' '}${p.id} ${d >= 1000 ? `${(d / 1000).toFixed(1)}km` : `${Math.round(d)}m`}`;
           const width = g.measureText(text).width;
+          x = clearOf(x, y, width, panel);
           label(text, x, y, pointColor(p.owner, side));
           boxes.push(pointMarkBox(x, y, width));
           if (mark) drawRing(g, x + (g.measureText(symbol).width - width) / 2, y, mark, pointColor(mark.owner, side));
@@ -255,18 +259,11 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
         <div className="killfeed">{lines.map((l, i) => <div key={i} className={l.mine ? 'mine' : ''}>{l.text}</div>)}</div>
         {radioText && <div className="battle-radio">{radioText}</div>}
         {world.avatar.kind === 'soldier' && world.soldier && (() => {
-          const s = world.soldier, a = world.soldierArms, m = a.ammo[a.selected]!, g = a.ammo.grenade ?? a.ammo.at_rocket, gear = world.soldierGear;
-          const medkit = gear.medkit ? t('battle.hud.medkitActive', { n: Math.ceil(gear.medkit.until - world.time) }) : world.time < gear.readyAt ? t('battle.hud.medkitWait', { n: Math.ceil(gear.readyAt - world.time) }) : t('battle.hud.medkitReady');
+          const { first, gear } = statusLines(world, touch);
           return (
-            <div className="soldier-status">
-              <b className={s.hp < 35 ? 'low' : ''}>{t('battle.hud.hp', { n: Math.ceil(s.hp) })}</b>
-              <span>{t(`battle.hud.weapon.${a.selected}`)} {a.reloading > 0 ? t('battle.hud.reloading') : `${m.mag} / ${m.reserve}`}</span>
-              {g && a.selected !== 'grenade' && a.selected !== 'at_rocket' && <span>{t(`battle.hud.weapon.${a.ammo.grenade ? 'grenade' : 'at_rocket'}`)} {g.mag + g.reserve}</span>}
-              {gear.medkitLeft > 0 && <span>{t('battle.hud.medkit', { state: medkit })}</span>}
-              {gear.repairable && <span>{t('battle.hud.repair', { state: gear.overheatUntil > world.time ? t('battle.hud.repairHot', { n: Math.ceil(gear.overheatUntil - world.time) }) : gear.repairing ? t('battle.hud.repairing') : t('battle.hud.medkitReady') })}</span>}
-              {(gear.mineLeft > 0 || gear.mines.length > 0) && <span>{t('battle.hud.mine', { n: gear.mineLeft })}</span>}
-              {gear.smokeLeft > 0 && <span>{t('battle.hud.smoke', { n: gear.smokeLeft })}</span>}
-              <span>{t(`battle.hud.stance.${s.stance}`)}</span>
+            <div className="soldier-status" ref={statusRef}>
+              <div><b className={first.low ? 'low' : ''}>{first.hp}</b><span>{first.ammo}</span>{first.stance && <span>{first.stance}</span>}</div>
+              {gear.length > 0 && <div>{gear.join(' · ')}</div>}
             </div>
           );
         })()}

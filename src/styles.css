@@ -245,6 +245,7 @@ button.mode:disabled { opacity: .45; cursor: default; }
 }
 .battle-hud .soldier-status { position: absolute; right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
   background: rgba(6, 12, 22, .6); border-radius: 8px; padding: 6px 12px; font-variant-numeric: tabular-nums; }
+.battle-hud .soldier-status > div { display: flex; gap: 10px; align-items: baseline; white-space: nowrap; }
 .battle-hud .soldier-status b { font-size: 18px; }
 .battle-hud .soldier-status b.low { color: #ef476f; }
 .battle-hud.touch .soldier-status { bottom: auto; top: calc(12px + env(safe-area-inset-top)); right: calc(180px + env(safe-area-inset-right)); flex-direction: row; gap: 10px; font-size: 13px; }
