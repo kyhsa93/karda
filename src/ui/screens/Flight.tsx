@@ -368,10 +368,10 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
           <VirtualStick className={`stick left size-${settings.controls.touchStickSize}`} radius={STICK_RADIUS[settings.controls.touchStickSize]} label={t('touch.moveStick')} onMove={(x, y) => { input.touch.lx = x; input.touch.ly = y; }} />
           <button className="tbtn pause" aria-label={t('touch.pause')} onPointerDown={press(() => setHelp(true))}>≡</button>
           <div className="soldier-gear">
-            <button className="tbtn" onPointerDown={press(() => runCommand(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? 'weapon2' : 'weapon1'))}>{gear.swap}</button>
+            <button className="tbtn swap" onPointerDown={press(() => runCommand(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? 'weapon2' : 'weapon1'))}>{gear.swap}</button>
             <button className="tbtn" onPointerDown={press(() => runCommand('reload'))}>{t('touch.reload')}</button>
-            {gear.medkit && <button className="tbtn" onPointerDown={press(() => runCommand('medkit'))}>{gear.medkit}</button>}
-            {gear.repair && <button className="tbtn" {...hold(on => { input.touchRepair = on; })}>{gear.repair}</button>}
+            {gear.medkit && <button className="tbtn medkit" onPointerDown={press(() => runCommand('medkit'))}>{gear.medkit}</button>}
+            {gear.repair && <button className="tbtn repair" {...hold(on => { input.touchRepair = on; })}>{gear.repair}</button>}
             {gear.mine && <button className="tbtn" onPointerDown={press(() => runCommand('mine'))}>{gear.mine}</button>}
             {gear.smoke && <button className="tbtn" onPointerDown={press(() => runCommand('smoke'))}>{gear.smoke}</button>}
           </div>

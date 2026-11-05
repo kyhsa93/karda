@@ -109,6 +109,15 @@ describe('touch gear buttons through the real Flight render (#233)', () => {
     expect(labels()).toEqual(['유탄 6', '재장전', '구급 상자 준비', '연막 2']);
   });
 
+  it('marks the buttons whose width is held while their state changes', async () => {
+    await flight('assault');
+    const classes = () => all(container, 'soldier-gear')[0].childNodes.map(n => n.attrs.class);
+    expect(classes()).toEqual(['tbtn swap', 'tbtn', 'tbtn medkit', 'tbtn']);
+    root.unmount();
+    await flight('engineer');
+    expect(classes()).toEqual(['tbtn swap', 'tbtn', 'tbtn repair', 'tbtn']);
+  });
+
   it('keeps the medkit and smoke names the control card checks (#301, #302)', async () => {
     const { labels } = await flight('assault');
     expect(labels().find(l => l.startsWith(`${t('touch.medkit')} `))).toBeDefined();
@@ -134,10 +143,10 @@ describe('touch gear buttons through the real Flight render (#233)', () => {
     const { world, frame, labels, steps } = await flight('assault');
     expect(world.placeMedkit()).toBe(true);
     await frame();
-    expect(labels()[2]).toBe('구급 상자 60초');
+    expect(labels()[2]).toBe('구급 상자 작동 60초');
     steps(1.5);
     await frame();
-    expect(labels()[2]).toBe('구급 상자 59초');
+    expect(labels()[2]).toBe('구급 상자 작동 59초');
     steps(59);
     await frame();
     expect(world.soldierGear.medkit).toBeNull();

@@ -146,6 +146,13 @@ describe('soldier status panel (#233)', () => {
     expect(lines()).toEqual(['체력 100소총 재장전 중', '유탄 6 · 구급 상자 준비 · 연막탄 2']);
   });
 
+  it('names the placed medkit as working on the gear line', async () => {
+    const { world, lines, tick } = await game();
+    expect(world.placeMedkit()).toBe(true);
+    await tick();
+    expect(lines()[1]).toBe('유탄 6 · 구급 상자 작동 60초 · 연막탄 2');
+  });
+
   it('hides the stance only while standing', async () => {
     const { session, world, lines, tick } = await game();
     expect(lines().join('|')).not.toContain('서기');
