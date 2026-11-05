@@ -96,7 +96,7 @@ button.go:disabled { opacity: .4; cursor: default; }
 button.mode {
   display: block; width: 100%; margin: 0 0 10px; padding: 14px 18px; border-radius: 12px; cursor: pointer;
   text-align: left; font: inherit; color: #e8eef7; background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .18); min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, .18); min-height: 48px;
 }
 button.mode b { display: block; font-size: 18px; }
 button.mode span { font-size: 13px; color: #aebbd0; }
@@ -165,24 +165,7 @@ button.mode:disabled { opacity: .45; cursor: default; }
   .room-grid { grid-template-columns: 1fr; }
   .room-card h1 { font-size: 24px; }
 }
-.campaign-map .node { position: absolute; transform: translate(-50%, -50%); width: 34px; height: 34px; border-radius: 50%; padding: 0; font: inherit; font-size: 14px;
-  display: flex; align-items: center; justify-content: center; color: #10151d; background: #e8eef7; border: 2px solid #10151d; cursor: pointer; }
-.campaign-map .node.done { background: #06d6a0; }
-.campaign-map .node.open { background: #ffd166; }
-.campaign-map .node.locked { background: rgba(30, 40, 55, .85); color: #8fa0b5; border-color: #8fa0b5; }
-.campaign-map .node.on { outline: 3px solid #fff; outline-offset: 2px; }
-.campaign-map .node small { position: absolute; top: -10px; right: -12px; font-size: 12px; font-weight: 800; background: #10151d; border-radius: 6px; padding: 0 4px; }
-.campaign-map .node small.gS { color: #ffd166; } .campaign-map .node small.gA { color: #06d6a0; } .campaign-map .node small.gB { color: #4cc9f0; } .campaign-map .node small.gC { color: #aebbd0; }
-.campaign-map .side { position: absolute; left: 8px; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: rgba(6, 12, 22, .6); pointer-events: none; }
-.campaign-map .side.enemy { top: 8px; color: #ef476f; }
-.campaign-map .side.allied { bottom: 8px; color: #4cc9f0; }
 .room-card h2.pick-title { font-size: 22px; color: #e8eef7; margin: 4px 0 8px; letter-spacing: 0; }
-.radio-menu { position: fixed; left: calc(16px + env(safe-area-inset-left)); top: 50%; transform: translateY(-50%); z-index: 4; display: flex; flex-direction: column; gap: 6px;
-  background: rgba(6, 12, 22, .78); border: 1px solid rgba(76, 201, 240, .6); border-radius: 10px; padding: 10px 12px; pointer-events: auto; }
-.radio-menu b { color: #4cc9f0; font-size: 15px; }
-.radio-menu button { font: inherit; font-size: 15px; text-align: left; color: #e8eef7; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .2); border-radius: 8px; padding: 6px 10px; }
-.radio-menu button.on { border-color: #4cc9f0; color: #4cc9f0; }
-.radio-menu small { color: #8fa0b5; font-size: 12px; }
 .hint.done { color: #06d6a0; }
 .stick.size-S { width: 110px; height: 110px; }
 .stick.size-L { width: 160px; height: 160px; }
@@ -208,12 +191,8 @@ button.mode:disabled { opacity: .45; cursor: default; }
 .tbtn.engine { left: 50%; transform: translateX(-50%); bottom: calc(40px + env(safe-area-inset-bottom)); }
 .flight3d.touch .hud3d { left: calc(72px + env(safe-area-inset-left)); }
 .tcol { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; max-width: 150px; }
-.campaign-map .node.locked { border-style: dashed; }
-.campaign-map .node.open::after { content: ''; position: absolute; inset: -6px; border: 2px solid #ffd166; border-radius: 50%; }
-.radio-menu button { min-height: 44px; }
 @media (pointer: coarse) {
-  .campaign-map .node { width: 44px; height: 44px; }
-  .choice button, .setting-row .choice button, .farp-menu button { min-height: 44px; min-width: 44px; }
+  .choice button, .setting-row .choice button, .farp-menu button, button.go { min-height: 48px; min-width: 48px; }
   .pylon { min-height: 64px; }
 }
 .choice button small { margin-left: 6px; font-size: 12px; opacity: .75; }
@@ -259,6 +238,9 @@ button.mode:disabled { opacity: .45; cursor: default; }
   .overlay.deploy .setting-row, .battle-setup .setting-row { padding: 3px 0; }
   .overlay.deploy .control-card { flex-direction: row; flex-wrap: wrap; column-gap: 12px; padding: 4px 8px; margin: 4px 0; font-size: 12px; }
   .battle-setup .pause-buttons { position: sticky; bottom: 0; background: linear-gradient(transparent, rgba(11, 19, 32, .92) 30%); padding-top: 8px; margin-bottom: 0; }
+}
+@media (max-height: 480px) and (pointer: coarse) {
+  .battle-setup .setting-row { padding: 1px 0; }
 }
 .battle-hud .soldier-status { position: absolute; right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
   background: rgba(6, 12, 22, .6); border-radius: 8px; padding: 6px 12px; font-variant-numeric: tabular-nums; }
