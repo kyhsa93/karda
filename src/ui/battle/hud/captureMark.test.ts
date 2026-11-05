@@ -51,11 +51,14 @@ describe('capture mark state (#228)', () => {
     const later = marks.of(p, 30)!;
     expect(first.contested).toBe(true);
     expect(later.progress).toBe(first.progress);
-    expect(markText(later)).toBe('× D 62%');
+    expect(markText(later)).toBe('× ■ D 62%');
     const q = point({ v: -62, contested: true });
     marks.update([q], 31);
-    expect(markText(marks.of(q, 31)!)).toBe('× D 62%');
+    expect(markText(marks.of(q, 31)!)).toBe('× ▲ D 62%');
     expect(marks.of(q, 31)!.owner).toBe('veros');
+    const zero = point({ v: 0, contested: true });
+    marks.update([zero], 32);
+    expect(markText(marks.of(zero, 32)!)).toBe('× ○ D 0%');
   });
 
   it('draws nothing while v holds and the point is not contested', () => {
@@ -152,6 +155,7 @@ describe('capture ring drawing (#228)', () => {
     const TEXT_HALF = 13 / 2 + 1.5;
     const HELI_TARGET_BUTTON_BOTTOM = 116;
     expect(floor).toBeGreaterThanOrEqual(HELI_TARGET_BUTTON_BOTTOM);
+    expect(css).toMatch(/\.flight3d\.touch \.coach \{[^}]*width: fit-content;/);
     for (const [w, h] of [[844, 390], [667, 375], [932, 430], [1024, 600], [1180, 820]]) {
       expect(Math.max(floor, (vh / 100) * h - less)).toBeGreaterThanOrEqual(markTextY(w, h) + TEXT_HALF);
     }

@@ -35,7 +35,7 @@ export class CaptureMarks {
 }
 
 export function markText(m: CaptureMark) {
-  return `${m.symbol} ${m.id} ${m.percent}%`;
+  return `${m.contested ? `× ${pointSymbol(m.owner, false)}` : m.symbol} ${m.id} ${m.percent}%`;
 }
 
 export function markTextY(w: number, h: number) {

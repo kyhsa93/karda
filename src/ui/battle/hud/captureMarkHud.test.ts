@@ -157,7 +157,7 @@ describe('capture mark in the HUD frame (#228)', () => {
     p.v = 62;
     p.contested = true;
     frame();
-    expect(drawn.texts.map(x => x.text)).toContain(`× ${p.id} 62%`);
+    expect(drawn.texts.map(x => x.text)).toContain(`× ■ ${p.id} 62%`);
     expect(drawn.arcs.filter(a => a.r === 11)).toHaveLength(2);
   });
 
