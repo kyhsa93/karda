@@ -16,6 +16,11 @@ describe('accessibility (07, M7-5)', () => {
     expect(MIN_FONT).toBeGreaterThanOrEqual(12);
   });
 
+  it('widens the deploy card on short screens so the kit row stays on one line above the button bar', () => {
+    const short = css.slice(css.indexOf('@media (max-height: 480px)'));
+    expect(short.slice(0, short.indexOf('\n}'))).toMatch(/\.overlay\.deploy \.card\.wide \{ max-width: 780px; \}/);
+  });
+
   it('gives touch buttons and campaign nodes at least 44px on touch screens', () => {
     expect(css).toMatch(/\.tbtn \{ min-width: 48px; min-height: 48px; \}/);
     const coarse = css.slice(css.indexOf('@media (pointer: coarse)'));

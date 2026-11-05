@@ -251,6 +251,8 @@ button.mode:disabled { opacity: .45; cursor: default; }
 .overlay.deploy { overflow-y: auto; }
 .overlay.deploy .pause-buttons { position: sticky; bottom: 0; background: linear-gradient(transparent, rgba(11, 19, 32, .92) 30%); padding-top: 8px; margin-bottom: 0; }
 @media (max-height: 480px) {
+  .overlay.deploy { padding-block: 6px; }
+  .overlay.deploy .card.wide { max-width: 780px; }
   .overlay.deploy h1 { font-size: 22px; margin: 0; }
   .overlay.deploy .sub { margin: 2px 0; font-size: 13px; }
   .overlay.deploy .setting-row { padding: 3px 0; }
