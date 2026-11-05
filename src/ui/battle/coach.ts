@@ -28,7 +28,7 @@ export const COACH_STEPS: CoachStep[] = [
   { id: 'rules.points', ready: f => f.playing, done: () => false },
   { id: 'soldier.move', ready: walking, done: (f, s) => f.walked - s.walked >= WALK_STEP },
   { id: 'soldier.shoot', ready: walking, done: (f, s) => f.shots > s.shots },
-  { id: 'soldier.capture', ready: f => walking(f) && f.inPoint, done: f => !f.inPoint },
+  { id: 'soldier.captureZone', ready: f => walking(f) && f.inPoint, done: f => !f.inPoint },
   { id: 'apache.collective', ready: flying, done: (f, s) => Math.abs(f.agl - s.agl) > 15 },
   { id: 'apache.tads', ready: flying, done: f => f.tads },
   { id: 'apache.identify', ready: flying, done: (f, s) => f.identified > s.identified },

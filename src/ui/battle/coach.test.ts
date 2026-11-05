@@ -47,10 +47,10 @@ describe('battle coach (wiki 8.10)', () => {
     expect(run(c, { ...foot, walked: WALK_STEP - 1 }, MIN_SHOW + 0.5)).toBe('soldier.move');
     expect(run(c, { ...foot, walked: WALK_STEP }, MIN_SHOW + 0.5)).toBe('soldier.shoot');
     expect(run(c, { ...foot, walked: WALK_STEP, shots: 1 }, MIN_SHOW + 0.5)).toBe(null);
-    expect(run(c, { ...foot, walked: WALK_STEP, shots: 1, inPoint: true }, 1)).toBe('soldier.capture');
+    expect(run(c, { ...foot, walked: WALK_STEP, shots: 1, inPoint: true }, 1)).toBe('soldier.captureZone');
     expect(run(c, { ...foot, walked: WALK_STEP, shots: 1 }, MIN_SHOW + 0.5)).toBe(null);
     expect(run(c, { ...foot, detected: 1 }, 5)).toBe(null);
-    expect(seen).toEqual(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.capture']);
+    expect(seen).toEqual(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.captureZone']);
     const later = new Coach(new Set(tips));
     expect(run(later, foot, 30)).toBe(null);
     expect(run(later, base, 1)).toBe('apache.collective');
@@ -68,7 +68,7 @@ describe('battle coach (wiki 8.10)', () => {
     it('shows on the first entry 90 s after the sortie', () => {
       const c = new Coach(new Set());
       expect(walkOutside(c, 90)).toBe(null);
-      expect(c.update({ ...outside(90), inPoint: true }, 0.1)).toBe('soldier.capture');
+      expect(c.update({ ...outside(90), inPoint: true }, 0.1)).toBe('soldier.captureZone');
     });
 
     it('records nothing until the player has been inside', () => {
@@ -76,32 +76,45 @@ describe('battle coach (wiki 8.10)', () => {
       const tips = new Set<string>();
       const c = new Coach(tips, COACH_STEPS, id => recorded.push(id));
       walkOutside(c, 600);
-      expect(tips.has('soldier.capture')).toBe(false);
-      expect(recorded).not.toContain('soldier.capture');
+      expect(tips.has('soldier.captureZone')).toBe(false);
+      expect(recorded).not.toContain('soldier.captureZone');
       c.update({ ...outside(600), inPoint: true }, 0.1);
-      expect(tips.has('soldier.capture')).toBe(false);
+      expect(tips.has('soldier.captureZone')).toBe(false);
       run(c, { ...outside(600), inPoint: true }, STEP_TIMEOUT + 1);
-      expect(tips.has('soldier.capture')).toBe(true);
-      expect(recorded).toContain('soldier.capture');
+      expect(tips.has('soldier.captureZone')).toBe(true);
+      expect(recorded).toContain('soldier.captureZone');
     });
 
     it('stays up while the player holds the circle, then times out', () => {
       const c = new Coach(new Set(['rules.points', 'soldier.move', 'soldier.shoot']));
       const inside = { ...foot, inPoint: true };
-      expect(run(c, inside, STEP_TIMEOUT - 1)).toBe('soldier.capture');
+      expect(run(c, inside, STEP_TIMEOUT - 1)).toBe('soldier.captureZone');
       expect(run(c, inside, 2)).toBe(null);
     });
 
     it('stays up for the minimum when the player only passes through', () => {
       const c = new Coach(new Set(['rules.points', 'soldier.move', 'soldier.shoot']));
-      expect(c.update({ ...foot, inPoint: true }, 0.1)).toBe('soldier.capture');
-      expect(run(c, foot, MIN_SHOW - 0.5)).toBe('soldier.capture');
+      expect(c.update({ ...foot, inPoint: true }, 0.1)).toBe('soldier.captureZone');
+      expect(run(c, foot, MIN_SHOW - 0.5)).toBe('soldier.captureZone');
       expect(run(c, foot, 1)).toBe(null);
     });
 
     it('stays hidden on a save that already recorded it', () => {
-      const c = new Coach(new Set(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.capture']));
+      const c = new Coach(new Set(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.captureZone']));
       expect(run(c, { ...foot, inPoint: true }, 30)).toBe(null);
+    });
+
+    it('shows once more on a save that recorded the old id, then never again', () => {
+      const tips = new Set(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.capture']);
+      const recorded: string[] = [];
+      const c = new Coach(tips, COACH_STEPS, id => recorded.push(id));
+      const inside = { ...foot, inPoint: true };
+      expect(run(c, foot, 30)).toBe(null);
+      expect(c.update(inside, 0.1)).toBe('soldier.captureZone');
+      run(c, inside, STEP_TIMEOUT + 1);
+      expect(recorded).toEqual(['soldier.captureZone']);
+      const next = new Coach(new Set(tips));
+      expect(run(next, inside, 30)).toBe(null);
     });
 
     it('stays hidden in a helicopter over a circle', () => {
