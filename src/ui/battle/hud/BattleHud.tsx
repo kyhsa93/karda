@@ -9,6 +9,7 @@ import type { FlightRenderer } from '../../../render/renderer';
 import type { SimEvent } from '../../../sim/events';
 import type { FlightSession } from '../../../sim/session';
 import type { Unit } from '../../../sim/units';
+import { CaptureMarks, drawRing, markText, markTextY, RING_LABEL_GAP } from './captureMark';
 import { shadeTerrain } from './minimap';
 import { COLORS, pointColor, pointSymbol, sideSymbol } from './symbols';
 import { INFANTRY_WEAPONS } from '../../../sim/infantry/arms';
@@ -16,7 +17,7 @@ import { radioLine, type DeathReport } from '../deathReport';
 
 type Side = 'coalition' | 'veros';
 
-interface Point { id: string; x: number; z: number; owner: 'coalition' | 'veros' | 'neutral'; v: number; contested: boolean }
+interface Point { id: string; x: number; z: number; radius: number; owner: 'coalition' | 'veros' | 'neutral'; v: number; contested: boolean }
 interface Runtime {
   conquest: { points: Point[]; tickets: Record<Side, number>; elapsed: number };
   rules: { timeLimitSec: number };
@@ -112,6 +113,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
   useEffect(() => {
     let raf = 0;
     const v = new THREE.Vector3();
+    const marks = new CaptureMarks();
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const c = canvasRef.current;
@@ -122,6 +124,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.clearRect(0, 0, w, h);
       flagsRef.current?.update(runtime.conquest.points, (x, z) => world.terrain.surfaceAt(x, z), Math.atan2(world.wind.x, world.wind.z));
+      marks.update(runtime.conquest.points, world.time);
       if (session.mode !== 'play') return;
       const cam = renderer?.camera;
       const me = world.playerBody().pos;
@@ -147,7 +150,10 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
           const minimapRight = (touch ? 0 : MINIMAP.desktop + 16) + 50;
           if (y > h - (touch ? 0 : MINIMAP.desktop + 16) && x < minimapRight) x = minimapRight;
           const d = Math.hypot(p.x - me.x, p.z - me.z);
-          label(`${pointSymbol(p.owner, p.contested)} ${p.id} ${d >= 1000 ? `${(d / 1000).toFixed(1)}km` : `${Math.round(d)}m`}`, x, y, pointColor(p.owner, side));
+          const symbol = pointSymbol(p.owner, p.contested), mark = marks.of(p, world.time);
+          const text = `${symbol}${mark ? RING_LABEL_GAP : ' '}${p.id} ${d >= 1000 ? `${(d / 1000).toFixed(1)}km` : `${Math.round(d)}m`}`;
+          label(text, x, y, pointColor(p.owner, side));
+          if (mark) drawRing(g, x + (g.measureText(symbol).width - g.measureText(text).width) / 2, y, mark, pointColor(mark.owner, side));
         }
         for (const u of world.units) {
           if (!u.alive || u.side !== side || !u.def.move) continue;
@@ -161,6 +167,8 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
           if (s.front && s.x > 0 && s.x < w && s.y > 0 && s.y < h) label('◆', s.x, s.y, COLORS.enemy);
         }
       }
+      const inside = marks.inside(runtime.conquest.points, me.x, me.z, world.time);
+      if (inside) label(markText(inside), w / 2, markTextY(w, h), pointColor(inside.owner, side));
       shade.current ??= shadeTerrain(world.terrain);
       const size = touch ? MINIMAP.touch : MINIMAP.desktop;
       const mx = touch ? 72 : 16, my = touch ? 12 : h - size - 16;

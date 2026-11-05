@@ -244,7 +244,7 @@ button.mode:disabled { opacity: .45; cursor: default; }
 .flight3d.battle:not(.touch) .farp-menu { top: calc(130px + env(safe-area-inset-top)); }
 .coach { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(110px + env(safe-area-inset-bottom)); max-width: min(640px, calc(100vw - 360px)); z-index: 4; pointer-events: none;
   background: rgba(6, 12, 22, .82); border: 1px solid rgba(255, 209, 102, .7); color: #ffd166; padding: 8px 14px; border-radius: 10px; font-size: 15px; text-align: center; }
-.flight3d.touch .coach { bottom: auto; top: calc(76px + env(safe-area-inset-top)); font-size: 13px; padding: 6px 10px; }
+.flight3d.touch .coach { bottom: auto; top: calc(max(116px, 28vh - 6px) + env(safe-area-inset-top)); left: calc(290px + env(safe-area-inset-left)); right: calc(100px + env(safe-area-inset-right)); transform: none; width: fit-content; max-width: none; font-size: 13px; padding: 6px 10px; }
 .control-card { display: flex; flex-direction: column; gap: 2px; text-align: left; background: rgba(255, 209, 102, .08); border: 1px solid rgba(255, 209, 102, .4); border-radius: 8px; padding: 8px 12px; margin: 8px 0; font-size: 13px; color: #cdd8e8; }
 .control-card b { color: #ffd166; }
 .sub.tip { color: #ffd166; }
