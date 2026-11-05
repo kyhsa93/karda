@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { assets } from '../../assets/loader';
 import { HELI_GROUP } from '../../assets/manifest';
 import { t, tList } from '../../content/strings';
-import { cardDevice, Coach, coachText, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, PointMarkBoard, type CoachFacts } from './coach';
+import { cardDevice, Coach, coachText, controlCard, deadTip, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, PointMarkBoard, type CoachFacts } from './coach';
 import { CoachBox } from './CoachBox';
 import { DeathReport } from './deathReport';
 import type { Settings, SortieRole } from '../../save/save';
@@ -132,13 +132,15 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
   if (snap.mode === 'deploy') {
     const wait = session.deployIn();
     const deathText = death.line();
+    const card = controlCard(role, tips);
+    const respawnTip = deadTip(tally.current.deaths, tips.includes('rules.dead'), card);
     return (
       <div className="overlay deploy">
         <div className="card wide">
           <h1>{t('battle.deploy.title')}</h1>
           {deathText && <p className="sub tip">{deathText}</p>}
           {tally.current.deaths > 0 && <p className="sub tip">{t(deathTip(tally.current.reason, tally.current.missile))}</p>}
-          {tally.current.deaths > 0 && !tips.includes('rules.dead') && <p className="sub tip">{t('battle.tips.dead')}</p>}
+          {respawnTip && <p className="sub tip">{t('battle.tips.dead')}</p>}
           <p className="sub">{t('battle.deploy.tickets', { c: Math.floor(c.tickets.coalition), v: Math.floor(c.tickets.veros) })} · {t('battle.deploy.elapsed', { t: clock(c.elapsed), limit: clock(runtime.rules.timeLimitSec) })} · {t('battle.deploy.points', { list: c.points.map(p => `${p.id}${p.owner === 'coalition' ? '■' : p.owner === 'veros' ? '▲' : '○'}`).join(' ') })}</p>
           <div className="setting-row"><span>{t('battle.deploy.role')}</span>
             <div className="choice">{(['soldier', 'heli'] as const).map(r => <button key={r} className={r === role ? 'on' : ''} disabled={r === 'heli' && !heliReady} onClick={() => { setRole(r); setSpawnId(r === 'heli' ? heliSpawn : soldierSpawn); }}>{t(r === 'heli' && side === 'veros' ? 'battle.roles.vpaHeli' : `battle.roles.${r}`)}{r === 'heli' && !heliReady && <small>{t('battle.setup.soon')}</small>}</button>)}</div>
@@ -157,7 +159,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
               <div className="choice">{mod.KIT_IDS.map(k => <button key={k} className={k === kit ? 'on' : ''} onClick={() => setKit(k)}>{t(`battle.kits.${k}`)}</button>)}</div>
             </div>
           )}
-          {(role === 'heli' ? firstSortie : firstFoot) && (
+          {card && (
             <div className="control-card">
               <b>{t(`battle.card.${role === 'heli' ? 'apache' : 'soldier'}.title`)}</b>
               {tList(`battle.card.${role === 'heli' ? 'apache' : 'soldier'}.${cardDevice(touch, typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [])}`).map(l => <span key={l}>{l}</span>)}
@@ -165,7 +167,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
           )}
           <div className="pause-buttons">
             <button className="go secondary" onClick={onSetup}>{t('battle.deploy.quit')}</button>
-            <button className="go" disabled={wait > 0} onClick={() => { if (chosen && session.deploy(runtime.spawnFor(chosen, mod.KITS[kit], cls))) { onRole(role); if (role === 'heli' ? firstSortie : firstFoot) onTip(role === 'heli' ? 'card.apache' : 'card.soldier'); if (tally.current.deaths > 0 && !tips.includes('rules.dead')) onTip('rules.dead'); } }}>
+            <button className="go" disabled={wait > 0} onClick={() => { if (chosen && session.deploy(runtime.spawnFor(chosen, mod.KITS[kit], cls))) { onRole(role); if (card) onTip(role === 'heli' ? 'card.apache' : 'card.soldier'); if (respawnTip) onTip('rules.dead'); } }}>
               {wait > 0 ? t('battle.deploy.wait', { s: Math.ceil(wait) }) : `${t('battle.deploy.go')} ▶`}
             </button>
           </div>

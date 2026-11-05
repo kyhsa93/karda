@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
+import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, controlCard, deadTip, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
 import { SOLDIER_COMMANDS } from '../../input/roles';
 import type { Command } from '../../input/bindings';
@@ -353,6 +353,43 @@ describe('initial role on the deploy screen (#226)', () => {
     expect(initialRole('veros', undefined)).toBe('soldier');
     expect(initialRole('veros', 'soldier')).toBe('soldier');
     expect(initialRole('veros', 'heli')).toBe('soldier');
+  });
+});
+
+describe('respawn line next to the first control card (#307)', () => {
+  it('shows the line after a death until it has been seen, and records it on that sortie', () => {
+    expect(deadTip(0, false, false)).toBe(false);
+    expect(deadTip(1, false, false)).toBe(true);
+    expect(deadTip(3, false, false)).toBe(true);
+    expect(deadTip(1, true, false)).toBe(false);
+  });
+
+  it('leaves the line out and unrecorded while a control card is on screen', () => {
+    expect(deadTip(1, false, true)).toBe(false);
+    expect(deadTip(0, false, true)).toBe(false);
+    expect(deadTip(1, true, true)).toBe(false);
+  });
+
+  it('shows the card for a role not flown yet', () => {
+    expect(controlCard('heli', [])).toBe(true);
+    expect(controlCard('soldier', [])).toBe(true);
+    expect(controlCard('heli', ['card.apache'])).toBe(false);
+    expect(controlCard('soldier', ['card.soldier'])).toBe(false);
+    expect(controlCard('heli', ['card.soldier'])).toBe(true);
+  });
+
+  it('brings the line back when a role switch takes the card away, and drops it again on switching back', () => {
+    for (const [tips, fresh, flown] of [[['card.apache'], 'soldier', 'heli'], [['card.soldier'], 'heli', 'soldier']] as const) {
+      expect(deadTip(1, false, controlCard(fresh, tips))).toBe(false);
+      expect(deadTip(1, false, controlCard(flown, tips))).toBe(true);
+      expect(deadTip(1, false, controlCard(fresh, tips))).toBe(false);
+    }
+  });
+
+  it('shows the line at the next death, once the card was seen on the sortie before', () => {
+    const tips = ['card.apache', 'card.soldier'];
+    expect(deadTip(2, tips.includes('rules.dead'), controlCard('soldier', tips))).toBe(true);
+    expect(deadTip(2, tips.includes('rules.dead'), controlCard('heli', tips))).toBe(true);
   });
 });
 

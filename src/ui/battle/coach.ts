@@ -127,6 +127,14 @@ export function deathTip(reason: string | undefined, missile: boolean) {
   return (reason && DEATH_TIPS[reason]) || 'battle.tips.fire';
 }
 
+export function controlCard(role: SortieRole, tips: readonly string[]) {
+  return !tips.includes(role === 'heli' ? 'card.apache' : 'card.soldier');
+}
+
+export function deadTip(deaths: number, seen: boolean, card: boolean) {
+  return deaths > 0 && !seen && !card;
+}
+
 export function cardDevice(touch: boolean, pads: readonly ({ connected: boolean } | null)[]) {
   return touch ? 'touch' : pads.some(p => p?.connected) ? 'pad' : 'keyboard';
 }
