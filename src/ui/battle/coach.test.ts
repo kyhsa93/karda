@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cardDevice, Coach, COACH_STEPS, coachText, deathTip, inCapturablePoint, initialRole, MIN_SHOW, nearestOpenPoint, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
+import { SOLDIER_COMMANDS } from '../../input/roles';
+import type { Command } from '../../input/bindings';
 import harek from '../../content/battle/maps/harek.json';
 
 const base: CoachFacts = { agl: 60, tads: false, identified: 0, flips: 0, detected: 0, deaths: 0, playing: true, foot: false, walked: 0, shots: 0, inPoint: false };
@@ -259,6 +261,34 @@ describe('first coach line says how to win and where to go (#230)', () => {
     expect(tList('battle.card.soldier.keyboard').join(' ')).toContain('마우스로 고개');
     expect(tList('battle.card.soldier.pad').join(' ')).toContain('오른쪽 스틱 고개');
     expect(tList('battle.card.soldier.touch').join(' ')).toContain('화면 드래그로 고개');
+  });
+});
+
+describe('soldier control card names the gear (#208)', () => {
+  const items = (device: string) => tList(`battle.card.soldier.${device}`).flatMap(l => l.split(' · '));
+  const KEY_ITEMS: Readonly<Record<string, Command>> = {
+    '앉기': 'crouch', '엎드리기': 'prone', '재장전': 'reload', '소총': 'weapon1', '유탄': 'weapon2',
+    '적 표시': 'spot', [t('touch.medkit')]: 'medkit', [t('touch.smoke')]: 'smoke',
+  };
+
+  it('lists the medkit and smoke keys on the keyboard card', () => {
+    expect(items('keyboard')).toEqual(expect.arrayContaining(['X 구급 상자', 'F 연막']));
+  });
+
+  it('prints every single key the way SOLDIER_COMMANDS binds it', () => {
+    const printed = items('keyboard').flatMap(i => /^\S /.test(i) ? [[i[0], i.slice(2)]] : []);
+    expect(printed.map(([, label]) => label).sort()).toEqual(Object.keys(KEY_ITEMS).sort());
+    for (const [key, label] of printed) {
+      expect(SOLDIER_COMMANDS[`${/\d/.test(key) ? 'Digit' : 'Key'}${key}`], `${key} ${label}`).toBe(KEY_ITEMS[label]);
+    }
+  });
+
+  it('names the touch buttons as they are labelled', () => {
+    expect(items('touch')).toEqual(expect.arrayContaining([t('touch.medkit'), t('touch.smoke')]));
+  });
+
+  it('keeps the gear off the pad card, which has no input for it', () => {
+    expect(items('pad').join(' ')).not.toMatch(/구급|연막/);
   });
 });
 
