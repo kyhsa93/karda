@@ -63,6 +63,37 @@ export class Coach {
   }
 }
 
+export const MARK_FONT_PX = 13;
+export const MARK_BORDER_PX = 3;
+export const MARK_STALE_MS = 1000;
+
+export interface Box { left: number; right: number; top: number; bottom: number }
+
+export function pointMarkBox(x: number, y: number, textWidth: number): Box {
+  const half = (MARK_FONT_PX + MARK_BORDER_PX) / 2;
+  return { left: x - textWidth / 2, right: x + textWidth / 2, top: y - half, bottom: y + half };
+}
+
+export class PointMarkBoard {
+  boxes: readonly Box[] = [];
+  at = -Infinity;
+
+  publish(boxes: readonly Box[], now: number) {
+    this.boxes = boxes;
+    this.at = now;
+  }
+
+  clear() {
+    this.boxes = [];
+    this.at = -Infinity;
+  }
+}
+
+export function coachDimmed(coach: Box | null | undefined, marks: PointMarkBoard, now: number) {
+  if (!coach || now - marks.at > MARK_STALE_MS) return false;
+  return marks.boxes.some(m => m.left < coach.right && m.right > coach.left && m.top < coach.bottom && m.bottom > coach.top);
+}
+
 export const DEATH_TIPS: Record<string, string> = {
   crewKilled: 'battle.tips.fire', rotorLoss: 'battle.tips.fire', terrain: 'battle.tips.terrain', tree: 'battle.tips.terrain', building: 'battle.tips.terrain',
   rotorStrike: 'battle.tips.terrain', water: 'battle.tips.terrain', outOfBounds: 'battle.tips.zone', hardLanding: 'battle.tips.landing',

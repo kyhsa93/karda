@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createElement } from 'react';
+import { createElement, Profiler } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import * as THREE from 'three';
 import harekRaw from '../../../content/battle/maps/harek.json?raw';
 import type { FlightRenderer } from '../../../render/renderer';
 import type { BattleMapDef } from '../../../sim/battle/schema';
 import { STEP } from '../../../sim/world';
+import { coachDimmed, MARK_STALE_MS, pointMarkBox, PointMarkBoard } from '../coach';
+import { CoachBox } from '../CoachBox';
 import { DeathReport } from '../deathReport';
 import { loadBattle } from '../loadBattle';
 import { BattleHud } from './BattleHud';
@@ -68,6 +70,7 @@ class FakeNode {
   removeAttribute(k: string) { delete this.attrs[k]; }
   addEventListener() {}
   removeEventListener() {}
+  getBoundingClientRect() { return { left: 290, right: 480, top: 116, bottom: 160 }; }
   getContext() { return this.context ??= this.attrs.class === 'battle-canvas' ? fakeContext(this.ownerDocument!.drawn) : fakeContext({ arcs: [], texts: [] }); }
 }
 
@@ -101,7 +104,11 @@ describe('capture mark in the HUD frame (#228)', () => {
     vi.unstubAllGlobals();
   });
 
-  async function game({ withCamera = true } = {}) {
+  const POINT_MARK = /^[■▲○×]\s+[A-Z] [\d.]+k?m$/;
+  const COACH = { left: 290, right: 480, top: 116, bottom: 160 };
+  const newNode = () => (document as unknown as { createElement: (t: string) => FakeNode }).createElement('div');
+
+  async function game({ withCamera = true, marks = new PointMarkBoard() } = {}) {
     const mod = await loadBattle();
     const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 1 });
     session.start();
@@ -113,9 +120,8 @@ describe('capture mark in the HUD frame (#228)', () => {
     camera.position.set(p.x, y, p.z + 200);
     camera.lookAt(p.x, y, p.z);
     const renderer = withCamera ? { camera, scene: { scene: { add() {} } }, overview: null } as unknown as FlightRenderer : null;
-    const container = (document as unknown as { createElement: (t: string) => FakeNode }).createElement('div');
-    root = createRoot(container as unknown as HTMLElement);
-    root.render(createElement(BattleHud, { session, runtime, side: 'coalition', renderer, touch: true, death: new DeathReport(session) }));
+    root = createRoot(newNode() as unknown as HTMLElement);
+    root.render(createElement(BattleHud, { session, runtime, side: 'coalition', renderer, touch: true, death: new DeathReport(session), marks }));
     await vi.waitFor(() => expect(frame).toBeTypeOf('function'));
     await new Promise(done => setTimeout(done, 20));
     return { session, runtime, world, p };
@@ -178,5 +184,64 @@ describe('capture mark in the HUD frame (#228)', () => {
     const { runtime } = await game({ withCamera: false });
     runtime.conquest.points.length = 0;
     expect(() => frame()).not.toThrow();
+  });
+
+  it('publishes the box of every drawn point mark and of nothing else (#295)', async () => {
+    const marks = new PointMarkBoard();
+    await game({ marks });
+    frame();
+    const drawnMarks = drawn.texts.filter(x => POINT_MARK.test(x.text));
+    expect(drawnMarks.length).toBeGreaterThan(0);
+    expect(marks.boxes).toEqual(drawnMarks.map(x => pointMarkBox(x.x, x.y, x.text.length * 7)));
+    expect(marks.at).toBeGreaterThan(0);
+  });
+
+  it('clears the published marks outside play (#295)', async () => {
+    const marks = new PointMarkBoard();
+    const { session } = await game({ marks });
+    frame();
+    expect(marks.boxes.length).toBeGreaterThan(0);
+    (session as unknown as { mode: string }).mode = 'deploy';
+    frame();
+    expect(marks.boxes).toEqual([]);
+    expect(coachDimmed(COACH, marks, performance.now())).toBe(false);
+  });
+
+  it('publishes nothing new when the HUD frame fails before the marks (#295)', async () => {
+    const marks = new PointMarkBoard();
+    const { world } = await game({ marks });
+    frame();
+    const { at } = marks;
+    world.terrain.surfaceAt = () => { throw new Error('hud failed'); };
+    expect(() => frame()).toThrow('hud failed');
+    expect(marks.at).toBe(at);
+  });
+
+  it('changes the coach class only when the answer changes, however many frames publish (#295)', async () => {
+    const marks = new PointMarkBoard();
+    const container = newNode();
+    root = createRoot(container as unknown as HTMLElement);
+    let commits = 0;
+    root.render(createElement(Profiler, { id: 'coach', onRender: () => { commits++; } }, createElement(CoachBox, { text: 'x', marks })));
+    await vi.waitFor(() => expect(container.childNodes.length).toBe(1));
+    const node = container.childNodes[0];
+    expect(node.attrs.class).toBe('coach');
+    expect(commits).toBeGreaterThan(0);
+    const on = [pointMarkBox(400, 140, 60)];
+    const publishFrames = async (boxes: typeof on) => { for (let i = 0; i < 25; i++) { marks.publish(boxes, performance.now()); await new Promise(done => setTimeout(done, 16)); } };
+    const staysPut = async (boxes: typeof on, cls: string) => {
+      await publishFrames(boxes);
+      expect(node.attrs.class).toBe(cls);
+      const settled = commits;
+      await publishFrames(boxes);
+      expect(node.attrs.class).toBe(cls);
+      expect(commits).toBe(settled);
+    };
+    await staysPut(on, 'coach dimmed');
+    await staysPut([pointMarkBox(100, 300, 60)], 'coach');
+    await staysPut(on, 'coach dimmed');
+    marks.publish(on, performance.now() - MARK_STALE_MS - 1);
+    await new Promise(done => setTimeout(done, 200));
+    expect(node.attrs.class).toBe('coach');
   });
 });

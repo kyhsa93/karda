@@ -13,6 +13,7 @@ import { CaptureMarks, drawRing, markText, markTextY, RING_LABEL_GAP } from './c
 import { shadeTerrain } from './minimap';
 import { COLORS, pointColor, pointSymbol, sideSymbol } from './symbols';
 import { INFANTRY_WEAPONS } from '../../../sim/infantry/arms';
+import { pointMarkBox, type Box, type PointMarkBoard } from '../coach';
 import { radioLine, type DeathReport } from '../deathReport';
 
 type Side = 'coalition' | 'veros';
@@ -49,7 +50,7 @@ function unitName(u: { defId: string; side: string }) {
 
 export const OVERVIEW_BACK = 400;
 
-export function BattleHud({ session, runtime, side, renderer, touch, death }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean; death: DeathReport }) {
+export function BattleHud({ session, runtime, side, renderer, touch, death, marks: pointMarks }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean; death: DeathReport; marks: PointMarkBoard }) {
   const world = session.world;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [, setTick] = useState(0);
@@ -125,7 +126,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
       g.clearRect(0, 0, w, h);
       flagsRef.current?.update(runtime.conquest.points, (x, z) => world.terrain.surfaceAt(x, z), Math.atan2(world.wind.x, world.wind.z));
       marks.update(runtime.conquest.points, world.time);
-      if (session.mode !== 'play') return;
+      if (session.mode !== 'play') { pointMarks.clear(); return; }
       const cam = renderer?.camera;
       const me = world.playerBody().pos;
       g.font = '600 13px "Karda Sans", sans-serif';
@@ -140,6 +141,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
           v.set(x, y, z).project(cam);
           return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, front: v.z < 1 };
         };
+        const boxes: Box[] = [];
         for (const p of runtime.conquest.points) {
           const s = project(p.x, world.terrain.surfaceAt(p.x, p.z) + 16, p.z);
           const edge = 48;
@@ -152,9 +154,12 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
           const d = Math.hypot(p.x - me.x, p.z - me.z);
           const symbol = pointSymbol(p.owner, p.contested), mark = marks.of(p, world.time);
           const text = `${symbol}${mark ? RING_LABEL_GAP : ' '}${p.id} ${d >= 1000 ? `${(d / 1000).toFixed(1)}km` : `${Math.round(d)}m`}`;
+          const width = g.measureText(text).width;
           label(text, x, y, pointColor(p.owner, side));
-          if (mark) drawRing(g, x + (g.measureText(symbol).width - g.measureText(text).width) / 2, y, mark, pointColor(mark.owner, side));
+          boxes.push(pointMarkBox(x, y, width));
+          if (mark) drawRing(g, x + (g.measureText(symbol).width - width) / 2, y, mark, pointColor(mark.owner, side));
         }
+        pointMarks.publish(boxes, performance.now());
         for (const u of world.units) {
           if (!u.alive || u.side !== side || !u.def.move) continue;
           const d = Math.hypot(u.pos.x - me.x, u.pos.z - me.z);
@@ -220,7 +225,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death }: { 
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [renderer, runtime, session, world, side, touch]);
+  }, [renderer, runtime, session, world, side, touch, pointMarks]);
 
   const c = runtime.conquest;
   const own = c.tickets[side], enemy = c.tickets[side === 'coalition' ? 'veros' : 'coalition'];

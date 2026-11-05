@@ -6,7 +6,7 @@ import { t } from '../../content/strings';
 import type { BattleMapDef } from '../../sim/battle/schema';
 import { STEP } from '../../sim/world';
 import { BattleOverlays } from './Battle';
-import { coachText } from './coach';
+import { coachText, PointMarkBoard } from './coach';
 import { DeathReport } from './deathReport';
 import { BattleHud, TICKET_WARN } from './hud/BattleHud';
 import { loadBattle } from './loadBattle';
@@ -18,6 +18,7 @@ class FakeNode {
   attrs: Record<string, string> = {};
   namespaceURI = 'http://www.w3.org/1999/xhtml';
   constructor(public nodeType: number, public nodeName: string, public ownerDocument: any, public nodeValue = '') {}
+  getBoundingClientRect() { return { left: 0, right: 0, top: 0, bottom: 0 }; }
   get tagName() { return this.nodeName; }
   get firstChild(): FakeNode | null { return this.childNodes[0] ?? null; }
   get lastChild(): FakeNode | null { return this.childNodes.at(-1) ?? null; }
@@ -88,8 +89,8 @@ describe('death line on screen (#227)', () => {
     const death = new DeathReport(session);
     root = createRoot(container as unknown as HTMLElement);
     root.render([
-      createElement(BattleHud, { key: 'hud', session, runtime, side: 'coalition', renderer: null, touch: false, death }),
-      createElement(BattleOverlays, { key: 'overlays', game: { mod, session, runtime, death }, side: 'coalition', touch: false, tips: ['card.soldier', 'rules.dead'], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }),
+      createElement(BattleHud, { key: 'hud', session, runtime, side: 'coalition', renderer: null, touch: false, death, marks: new PointMarkBoard() }),
+      createElement(BattleOverlays, { key: 'overlays', game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: 'coalition', touch: false, tips: ['card.soldier', 'rules.dead'], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }),
     ]);
     await vi.waitFor(() => expect(all(container, 'battle-canvas').length).toBe(1));
     const enemy = session.world.units.find(u => u.defId === 'aaa_light' && u.side === 'veros')!;
@@ -176,7 +177,7 @@ describe('soldier control card on the deploy screen (#208)', () => {
     session.start();
     const death = new DeathReport(session);
     root = createRoot(container as unknown as HTMLElement);
-    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death }, side: 'coalition', touch, tips: [], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }));
+    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: 'coalition', touch, tips: [], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }));
     await vi.waitFor(() => expect(all(container, 'control-card')).toHaveLength(1));
     return all(container, 'control-card')[0].textContent;
   }
@@ -222,7 +223,7 @@ describe('first coach line on screen (#230)', () => {
     const death = new DeathReport(session);
     session.deploy({ ...SOLDIER, x: at[0], z: at[1] });
     root = createRoot(container as unknown as HTMLElement);
-    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death }, side, touch: true, tips: [], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }));
+    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side, touch: true, tips: [], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }));
     const coach = () => all(container, 'coach').map(n => n.textContent);
     await vi.waitFor(() => expect(coach()).toHaveLength(1));
     return { runtime, coach };
