@@ -28,7 +28,7 @@ export const COACH_STEPS: CoachStep[] = [
   { id: 'rules.points', ready: f => f.playing, done: () => false },
   { id: 'soldier.move', ready: walking, done: (f, s) => f.walked - s.walked >= WALK_STEP },
   { id: 'soldier.shoot', ready: walking, done: (f, s) => f.shots > s.shots },
-  { id: 'soldier.capture', ready: walking, done: f => f.inPoint },
+  { id: 'soldier.capture', ready: f => walking(f) && f.inPoint, done: f => !f.inPoint },
   { id: 'apache.collective', ready: flying, done: (f, s) => Math.abs(f.agl - s.agl) > 15 },
   { id: 'apache.tads', ready: flying, done: f => f.tads },
   { id: 'apache.identify', ready: flying, done: (f, s) => f.identified > s.identified },
@@ -66,6 +66,10 @@ export const DEATH_TIPS: Record<string, string> = {
   rotorStrike: 'battle.tips.terrain', water: 'battle.tips.terrain', outOfBounds: 'battle.tips.zone', hardLanding: 'battle.tips.landing',
   slideLanding: 'battle.tips.landing', tiltLanding: 'battle.tips.landing', slope: 'battle.tips.landing', ditched: 'battle.tips.terrain',
 };
+
+export function inCapturablePoint(points: readonly { x: number; z: number; radius: number; owner: string }[], side: string, x: number, z: number) {
+  return points.some(p => p.owner !== side && Math.hypot(x - p.x, z - p.z) <= p.radius);
+}
 
 export function deathTip(reason: string | undefined, missile: boolean) {
   if (reason === 'killed') return 'battle.tips.soldier';
