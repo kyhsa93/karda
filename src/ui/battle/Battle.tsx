@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { assets } from '../../assets/loader';
 import { HELI_GROUP } from '../../assets/manifest';
 import { t, tList } from '../../content/strings';
-import { cardDevice, Coach, deathTip, initialRole, type CoachFacts } from './coach';
+import { cardDevice, Coach, deathTip, inCapturablePoint, initialRole, type CoachFacts } from './coach';
 import { DeathReport } from './deathReport';
 import type { Settings, SortieRole } from '../../save/save';
 import { DIFFICULTIES } from '../../sim/difficulty';
@@ -99,12 +99,12 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
         T.at = { x: body.pos.x, z: body.pos.z };
       } else T.at = null;
       if (w.soldierLastShot > T.lastShot) { T.lastShot = w.soldierLastShot; T.shots++; }
-      const inPoint = foot && runtime.conquest.points.some(p => Math.hypot(body.pos.x - p.x, body.pos.z - p.z) <= p.radius);
+      const inPoint = foot && inCapturablePoint(runtime.conquest.points, side, body.pos.x, body.pos.z);
       const facts: CoachFacts = { agl: body.agl, tads: w.tads.active, identified: T.identified, flips: T.flips, detected: T.detected, deaths: T.deaths, playing: session.mode === 'play' && body.alive && !session.paused, foot, walked: T.walked, shots: T.shots, inPoint };
       setLine(coach.update(facts, facts.playing ? dt : 0));
     }, 100);
     return () => clearInterval(id);
-  }, [session, runtime, coach]);
+  }, [session, runtime, coach, side]);
   useEffect(() => {
     if (snap.mode !== 'deploy') return;
     const id = setInterval(() => tick(n => n + 1), 250);

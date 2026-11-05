@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, COACH_STEPS, deathTip, initialRole, MIN_SHOW, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
+import { cardDevice, Coach, COACH_STEPS, deathTip, inCapturablePoint, initialRole, MIN_SHOW, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
 
 const base: CoachFacts = { agl: 60, tads: false, identified: 0, flips: 0, detected: 0, deaths: 0, playing: true, foot: false, walked: 0, shots: 0, inPoint: false };
@@ -28,7 +28,7 @@ describe('battle coach (wiki 8.10)', () => {
     const tips = new Set<string>();
     const a = new Coach(tips);
     run(a, { ...base, flips: 1, detected: 1 }, 200);
-    run(a, { ...foot, flips: 1 }, 200);
+    run(a, { ...foot, flips: 1, inPoint: true }, 200);
     expect([...tips].sort()).toEqual(COACH_STEPS.map(s => s.id).sort());
     const b = new Coach(new Set(tips));
     expect(run(b, { ...base, flips: 1, detected: 1 }, 30)).toBe(null);
@@ -46,13 +46,96 @@ describe('battle coach (wiki 8.10)', () => {
     expect(run(c, foot, STEP_TIMEOUT)).toBe('soldier.move');
     expect(run(c, { ...foot, walked: WALK_STEP - 1 }, MIN_SHOW + 0.5)).toBe('soldier.move');
     expect(run(c, { ...foot, walked: WALK_STEP }, MIN_SHOW + 0.5)).toBe('soldier.shoot');
-    expect(run(c, { ...foot, walked: WALK_STEP, shots: 1 }, MIN_SHOW + 0.5)).toBe('soldier.capture');
-    expect(run(c, { ...foot, walked: WALK_STEP, shots: 1, inPoint: true }, MIN_SHOW + 0.5)).toBe(null);
+    expect(run(c, { ...foot, walked: WALK_STEP, shots: 1 }, MIN_SHOW + 0.5)).toBe(null);
+    expect(run(c, { ...foot, walked: WALK_STEP, shots: 1, inPoint: true }, 1)).toBe('soldier.captureZone');
+    expect(run(c, { ...foot, walked: WALK_STEP, shots: 1 }, MIN_SHOW + 0.5)).toBe(null);
     expect(run(c, { ...foot, detected: 1 }, 5)).toBe(null);
-    expect(seen).toEqual(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.capture']);
+    expect(seen).toEqual(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.captureZone']);
     const later = new Coach(new Set(tips));
     expect(run(later, foot, 30)).toBe(null);
     expect(run(later, base, 1)).toBe('apache.collective');
+  });
+
+  describe('capture banner waits for the circle (#229)', () => {
+    const outside = (t: number): CoachFacts => ({ ...foot, walked: t * 5, shots: Math.floor(t / 5) });
+
+    function walkOutside(c: Coach, seconds: number) {
+      let id: string | null = null;
+      for (let t = 0; t < seconds; t += 0.1) id = c.update(outside(t), 0.1);
+      return id;
+    }
+
+    it('shows on the first entry 90 s after the sortie', () => {
+      const c = new Coach(new Set());
+      expect(walkOutside(c, 90)).toBe(null);
+      expect(c.update({ ...outside(90), inPoint: true }, 0.1)).toBe('soldier.captureZone');
+    });
+
+    it('records nothing until the player has been inside', () => {
+      const recorded: string[] = [];
+      const tips = new Set<string>();
+      const c = new Coach(tips, COACH_STEPS, id => recorded.push(id));
+      walkOutside(c, 600);
+      expect(tips.has('soldier.captureZone')).toBe(false);
+      expect(recorded).not.toContain('soldier.captureZone');
+      c.update({ ...outside(600), inPoint: true }, 0.1);
+      expect(tips.has('soldier.captureZone')).toBe(false);
+      run(c, { ...outside(600), inPoint: true }, STEP_TIMEOUT + 1);
+      expect(tips.has('soldier.captureZone')).toBe(true);
+      expect(recorded).toContain('soldier.captureZone');
+    });
+
+    it('stays up while the player holds the circle, then times out', () => {
+      const c = new Coach(new Set(['rules.points', 'soldier.move', 'soldier.shoot']));
+      const inside = { ...foot, inPoint: true };
+      expect(run(c, inside, STEP_TIMEOUT - 1)).toBe('soldier.captureZone');
+      expect(run(c, inside, 2)).toBe(null);
+    });
+
+    it('stays up for the minimum when the player only passes through', () => {
+      const c = new Coach(new Set(['rules.points', 'soldier.move', 'soldier.shoot']));
+      expect(c.update({ ...foot, inPoint: true }, 0.1)).toBe('soldier.captureZone');
+      expect(run(c, foot, MIN_SHOW - 0.5)).toBe('soldier.captureZone');
+      expect(run(c, foot, 1)).toBe(null);
+    });
+
+    it('stays hidden on a save that already recorded it', () => {
+      const c = new Coach(new Set(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.captureZone']));
+      expect(run(c, { ...foot, inPoint: true }, 30)).toBe(null);
+    });
+
+    it('shows once more on a save that recorded the old id, then never again', () => {
+      const tips = new Set(['rules.points', 'soldier.move', 'soldier.shoot', 'soldier.capture']);
+      const recorded: string[] = [];
+      const c = new Coach(tips, COACH_STEPS, id => recorded.push(id));
+      const inside = { ...foot, inPoint: true };
+      expect(run(c, foot, 30)).toBe(null);
+      expect(c.update(inside, 0.1)).toBe('soldier.captureZone');
+      run(c, inside, STEP_TIMEOUT + 1);
+      expect(recorded).toEqual(['soldier.captureZone']);
+      const next = new Coach(new Set(tips));
+      expect(run(next, inside, 30)).toBe(null);
+    });
+
+    it('stays hidden in a helicopter over a circle', () => {
+      const c = new Coach(new Set(['rules.points', 'apache.collective', 'apache.tads', 'apache.identify']));
+      expect(run(c, { ...base, inPoint: true }, 30)).toBe(null);
+    });
+
+    it('counts only circles the side does not own yet', () => {
+      const points = [
+        { x: 0, z: 0, radius: 50, owner: 'coalition' },
+        { x: 500, z: 0, radius: 50, owner: 'neutral' },
+        { x: 1000, z: 0, radius: 50, owner: 'veros' },
+      ] as const;
+      expect(inCapturablePoint(points, 'coalition', 0, 0)).toBe(false);
+      expect(inCapturablePoint(points, 'coalition', 500, 0)).toBe(true);
+      expect(inCapturablePoint(points, 'coalition', 1000, 50)).toBe(true);
+      expect(inCapturablePoint(points, 'coalition', 1000, 51)).toBe(false);
+      expect(inCapturablePoint(points, 'veros', 0, 0)).toBe(true);
+      expect(inCapturablePoint(points, 'veros', 500, 0)).toBe(true);
+      expect(inCapturablePoint(points, 'veros', 1000, 0)).toBe(false);
+    });
   });
 
   it('has a string for every step and tip', () => {
