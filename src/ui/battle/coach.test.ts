@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, COACH_STEPS, deathTip, inCapturablePoint, initialRole, MIN_SHOW, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
+import { cardDevice, Coach, COACH_STEPS, coachText, deathTip, inCapturablePoint, initialRole, MIN_SHOW, nearestOpenPoint, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
+import harek from '../../content/battle/maps/harek.json';
 
 const base: CoachFacts = { agl: 60, tads: false, identified: 0, flips: 0, detected: 0, deaths: 0, playing: true, foot: false, walked: 0, shots: 0, inPoint: false };
 const foot: CoachFacts = { ...base, foot: true };
@@ -166,6 +169,96 @@ describe('battle coach (wiki 8.10)', () => {
     expect(cardDevice(false, [null, { connected: true }])).toBe('pad');
     expect(cardDevice(false, [null, { connected: false }])).toBe('keyboard');
     for (const role of ['apache', 'soldier']) for (const d of ['keyboard', 'touch', 'pad']) expect(tList(`battle.card.${role}.${d}`)).toHaveLength(3);
+  });
+});
+
+describe('first coach line says how to win and where to go (#230)', () => {
+  type Mode = 'quick' | 'conquest';
+  const open = (mode: Mode, overrides: Record<string, string> = {}) => harek.modes[mode].points.map(id => {
+    const p = harek.points.find(q => q.id === id)!;
+    return { id, x: p.position[0], z: p.position[1], owner: overrides[id] ?? (harek.modes[mode].start as Record<string, string>)[id] };
+  });
+  const at = (id: string) => { const p = harek.points.find(q => q.id === id)!; return { x: p.position[0], z: p.position[1] }; };
+  const SIDES = ['coalition', 'veros'] as const;
+  const MOBILE_LINE = 28;
+
+  it('names the nearest point the side does not own, for both sides', () => {
+    const quick = open('quick');
+    expect(nearestOpenPoint(quick, 'coalition', at('A').x, at('A').z)).toBe('D');
+    expect(nearestOpenPoint(quick, 'veros', at('G').x, at('G').z)).toBe('D');
+    const rally = harek.modes.quick.rally;
+    expect(nearestOpenPoint(quick, 'coalition', rally.coalition[0], rally.coalition[1])).toBe('D');
+    expect(nearestOpenPoint(quick, 'veros', rally.veros[0], rally.veros[1])).toBe('D');
+    const conquest = open('conquest');
+    expect(nearestOpenPoint(conquest, 'coalition', at('A').x, at('A').z)).toBe('C');
+    expect(nearestOpenPoint(conquest, 'veros', at('G').x, at('G').z)).toBe('E');
+  });
+
+  it('counts enemy and neutral points alike and skips the ones already held', () => {
+    expect(nearestOpenPoint(open('quick', { D: 'coalition' }), 'coalition', at('D').x, at('D').z)).toBe('G');
+    expect(nearestOpenPoint(open('quick', { D: 'veros' }), 'veros', at('D').x, at('D').z)).toBe('A');
+    expect(nearestOpenPoint(open('quick', { D: 'veros' }), 'coalition', at('A').x, at('A').z)).toBe('D');
+  });
+
+  it('finds no target once every point is held, for both sides', () => {
+    expect(nearestOpenPoint(open('quick', { A: 'coalition', D: 'coalition', G: 'coalition' }), 'coalition', 0, 0)).toBe(null);
+    expect(nearestOpenPoint(open('quick', { A: 'veros', D: 'veros', G: 'veros' }), 'veros', 0, 0)).toBe(null);
+  });
+
+  for (const side of SIDES) {
+    it(`puts the target first and the win condition after it for ${side}`, () => {
+      const line = coachText('rules.points', side, 'D');
+      expect(line.startsWith('D ')).toBe(true);
+      expect(line).toContain('적 티켓 0이면 승리');
+    });
+
+    it(`still reads as a sentence with no target for ${side}`, () => {
+      const line = coachText('rules.points', side, null);
+      expect(line).not.toMatch(/[{}]|undefined|null/);
+      expect(line.startsWith(' ')).toBe(false);
+      expect(line.startsWith('거점을 지키세요')).toBe(true);
+      expect(line).toContain('적 티켓 0이면 승리');
+    });
+
+    it(`keeps the point symbol legend with the sides the right way round for ${side}`, () => {
+      const [own, enemy] = side === 'coalition' ? ['■', '▲'] : ['▲', '■'];
+      for (const target of ['D', null]) {
+        const line = coachText('rules.points', side, target);
+        expect(line).toContain(`${own} 아군`);
+        expect(line).toContain(`${enemy} 적`);
+        expect(line).toContain('○ 중립');
+        expect(line).toContain('× 교전');
+      }
+    });
+
+    it(`breaks into two lines of at most 28 characters for ${side}`, () => {
+      for (const target of ['D', null]) {
+        const lines = coachText('rules.points', side, target).split('\n');
+        expect(lines).toHaveLength(2);
+        for (const l of lines) expect([...l].length).toBeLessThanOrEqual(MOBILE_LINE);
+      }
+    });
+  }
+
+  it('honours the line break in the coach box', () => {
+    const css = readFileSync(join(__dirname, '..', '..', 'styles.css'), 'utf8');
+    expect(css).toMatch(/(^|\n)\.coach \{[^}]*white-space: pre-line;/);
+  });
+
+  it('leaves every other step without a target untouched', () => {
+    expect(coachText('soldier.move', 'coalition', null)).toBe(t('battle.coach.soldier.move'));
+    expect(coachText('rules.tickets', 'veros', 'D')).toBe(t('battle.coach.rules.tickets'));
+  });
+
+  it('adds no step and keeps the rules line first', () => {
+    expect(COACH_STEPS).toHaveLength(9);
+    expect(COACH_STEPS[0].id).toBe('rules.points');
+  });
+
+  it('names the head control on the keyboard and pad soldier cards', () => {
+    expect(tList('battle.card.soldier.keyboard').join(' ')).toContain('마우스로 고개');
+    expect(tList('battle.card.soldier.pad').join(' ')).toContain('오른쪽 스틱 고개');
+    expect(tList('battle.card.soldier.touch').join(' ')).toContain('화면 드래그로 고개');
   });
 });
 

@@ -1,4 +1,6 @@
+import { t } from '../../content/strings';
 import type { SortieRole } from '../../save/save';
+import { sideSymbol } from './hud/symbols';
 
 export const STEP_TIMEOUT = 20;
 export const MIN_SHOW = 3;
@@ -69,6 +71,20 @@ export const DEATH_TIPS: Record<string, string> = {
 
 export function inCapturablePoint(points: readonly { x: number; z: number; radius: number; owner: string }[], side: string, x: number, z: number) {
   return points.some(p => p.owner !== side && Math.hypot(x - p.x, z - p.z) <= p.radius);
+}
+
+export function nearestOpenPoint(points: readonly { id: string; x: number; z: number; owner: string }[], side: string, x: number, z: number) {
+  let nearest: string | null = null, best = Infinity;
+  for (const p of points) {
+    const d = Math.hypot(x - p.x, z - p.z);
+    if (p.owner !== side && d < best) { best = d; nearest = p.id; }
+  }
+  return nearest;
+}
+
+export function coachText(line: string, side: 'coalition' | 'veros', target: string | null) {
+  const key = line === 'rules.points' && !target ? 'rules.pointsHeld' : line;
+  return t(`battle.coach.${key}`, { own: sideSymbol(side), enemy: sideSymbol(side === 'coalition' ? 'veros' : 'coalition'), target: target ?? '' });
 }
 
 export function deathTip(reason: string | undefined, missile: boolean) {

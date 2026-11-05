@@ -6,6 +6,7 @@ import { t } from '../../content/strings';
 import type { BattleMapDef } from '../../sim/battle/schema';
 import { STEP } from '../../sim/world';
 import { BattleOverlays } from './Battle';
+import { coachText } from './coach';
 import { DeathReport } from './deathReport';
 import { BattleHud, TICKET_WARN } from './hud/BattleHud';
 import { loadBattle } from './loadBattle';
@@ -156,4 +157,45 @@ describe('death line on screen (#227)', () => {
     const order = flat(container);
     expect(order.indexOf(all(container, 'tip').at(-1)!)).toBeLessThan(order.indexOf(all(container, 'setting-row')[0]));
   });
+});
+
+describe('first coach line on screen (#230)', () => {
+  let root: Root;
+  let container: FakeNode;
+
+  beforeEach(() => { container = fakeDom(); });
+  afterEach(async () => {
+    root.unmount();
+    await new Promise(done => setTimeout(done, 20));
+    vi.unstubAllGlobals();
+  });
+
+  async function deployed(side: 'coalition' | 'veros', at: readonly [number, number]) {
+    const mod = await loadBattle();
+    const { session, runtime } = mod.createBattleSession(harek, 'quick', { side, seed: 1 });
+    session.start();
+    const death = new DeathReport(session);
+    session.deploy({ ...SOLDIER, x: at[0], z: at[1] });
+    root = createRoot(container as unknown as HTMLElement);
+    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death }, side, touch: true, tips: [], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }));
+    const coach = () => all(container, 'coach').map(n => n.textContent);
+    await vi.waitFor(() => expect(coach()).toHaveLength(1));
+    return { runtime, coach };
+  }
+
+  const RALLY = harek.modes.quick!.rally!;
+
+  for (const side of ['coalition', 'veros'] as const) {
+    it(`names the nearest open point for ${side}`, async () => {
+      const g = await deployed(side, RALLY[side]!);
+      expect(g.coach()[0]).toMatch(/^D 거점으로 /);
+      expect(g.coach()[0]).toBe(coachText('rules.points', side, 'D'));
+    });
+
+    it(`drops the target once every point is held for ${side}`, async () => {
+      const g = await deployed(side, RALLY[side]!);
+      for (const p of g.runtime.conquest.points) p.owner = side;
+      await vi.waitFor(() => expect(g.coach()[0]).toBe(coachText('rules.points', side, null)));
+    });
+  }
 });

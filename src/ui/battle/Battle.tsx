@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { assets } from '../../assets/loader';
 import { HELI_GROUP } from '../../assets/manifest';
 import { t, tList } from '../../content/strings';
-import { cardDevice, Coach, deathTip, inCapturablePoint, initialRole, type CoachFacts } from './coach';
+import { cardDevice, Coach, coachText, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, type CoachFacts } from './coach';
 import { DeathReport } from './deathReport';
 import type { Settings, SortieRole } from '../../save/save';
 import { DIFFICULTIES } from '../../sim/difficulty';
@@ -12,7 +12,6 @@ import type { BattleChoice } from './BattleSetup';
 import { BattleLoadBoundary, useRaiseInRender } from './BattleLoadBoundary';
 import { loadBattle } from './loadBattle';
 import { BattleHud } from './hud/BattleHud';
-import { sideSymbol } from './hud/symbols';
 import type { FlightRenderer } from '../../render/renderer';
 
 type BattleModule = Awaited<ReturnType<typeof loadBattle>>;
@@ -87,6 +86,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
   tipsRef.current = tips;
   const [coach] = useState(() => new Coach(new Set(tips), undefined, onTip));
   const [line, setLine] = useState<string | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
   useEffect(() => {
     let last = session.world.time;
     const id = setInterval(() => {
@@ -102,6 +102,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
       const inPoint = foot && inCapturablePoint(runtime.conquest.points, side, body.pos.x, body.pos.z);
       const facts: CoachFacts = { agl: body.agl, tads: w.tads.active, identified: T.identified, flips: T.flips, detected: T.detected, deaths: T.deaths, playing: session.mode === 'play' && body.alive && !session.paused, foot, walked: T.walked, shots: T.shots, inPoint };
       setLine(coach.update(facts, facts.playing ? dt : 0));
+      setTarget(nearestOpenPoint(runtime.conquest.points, side, body.pos.x, body.pos.z));
     }, 100);
     return () => clearInterval(id);
   }, [session, runtime, coach, side]);
@@ -191,5 +192,5 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
       </div>
     );
   }
-  return line && (snap.mode === 'play') ? <div className="coach">{t(`battle.coach.${line}`, { own: sideSymbol(side), enemy: sideSymbol(side === 'coalition' ? 'veros' : 'coalition') })}</div> : null;
+  return line && (snap.mode === 'play') ? <div className="coach">{coachText(line, side, target)}</div> : null;
 }
