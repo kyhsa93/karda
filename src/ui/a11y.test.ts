@@ -33,11 +33,19 @@ describe('accessibility (07, M7-5)', () => {
     expect(setup).toMatch(/className="menu setup"/);
   });
 
-  it('gives touch buttons and campaign nodes at least 44px on touch screens', () => {
+  it('gives touch buttons at least 48px on touch screens, keeps the FARP menu at 44px and leaves fine pointers alone', () => {
     expect(css).toMatch(/\.tbtn \{ min-width: 48px; min-height: 48px; \}/);
     const coarse = css.slice(css.indexOf('@media (pointer: coarse)'));
-    expect(coarse).toMatch(/\.campaign-map \.node \{ width: 44px; height: 44px; \}/);
-    expect(coarse).toMatch(/min-height: 44px/);
-    expect(css).toMatch(/\.radio-menu button \{ min-height: 44px; \}/);
+    const rules = coarse.slice(0, coarse.indexOf('\n}'));
+    expect(rules).toMatch(/\.choice button, \.setting-row \.choice button, button\.go \{ min-height: 48px; min-width: 48px; \}\n  \.farp-menu button \{ min-height: 44px; min-width: 44px; \}/);
+    const fine = css.replace(rules, '');
+    expect(fine).toMatch(/\.setting-row \.choice button \{ padding: 6px 10px; min-height: 36px; \}/);
+    expect(fine).not.toMatch(/button\.go \{[^}]*min-height/);
+  });
+
+  it('gives back the height of the 48px setup and deploy buttons in row padding on short touch screens only', () => {
+    const start = css.indexOf('@media (max-height: 480px) and (pointer: coarse)');
+    expect(start).toBeGreaterThan(css.indexOf('.overlay.deploy .setting-row, .battle-setup .setting-row { padding: 3px 0; }'));
+    expect(css.slice(start, css.indexOf('\n}', start))).toMatch(/\.overlay\.deploy \.setting-row, \.battle-setup \.setting-row \{ padding: 1px 0; \}/);
   });
 });
