@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, COACH_STEPS, coachText, deathTip, inCapturablePoint, initialRole, MIN_SHOW, nearestOpenPoint, STEP_TIMEOUT, WALK_STEP, type CoachFacts } from './coach';
+import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
 import { SOLDIER_COMMANDS } from '../../input/roles';
 import type { Command } from '../../input/bindings';
@@ -353,5 +353,83 @@ describe('initial role on the deploy screen (#226)', () => {
     expect(initialRole('veros', undefined)).toBe('soldier');
     expect(initialRole('veros', 'soldier')).toBe('soldier');
     expect(initialRole('veros', 'heli')).toBe('soldier');
+  });
+});
+
+describe('coach over a point mark (#295)', () => {
+  const COACH: Box = { left: 290, right: 480, top: 116, bottom: 160 };
+  const board = (boxes: Box[], at = 1000) => {
+    const b = new PointMarkBoard();
+    b.publish(boxes, at);
+    return b;
+  };
+
+  it('boxes a mark from its drawn x, y and text width with the 13px font and 3px border', () => {
+    expect(pointMarkBox(422, 165.2, 66)).toEqual({ left: 389, right: 455, top: 157.2, bottom: 173.2 });
+  });
+
+  it.each([
+    ['667x375 helicopter first view, 9.2px over', 333.5, 158.8, 66, true],
+    ['844x390 helicopter first view, 2.8px over', 422, 165.2, 66, false],
+    ['932x430 helicopter with the head down, 4.0px over', 466, 164, 66, false],
+    ['932x430 helicopter first view', 466, 182.1, 66, false],
+    ['667x375 soldier facing D', 333.5, 136.1, 64, true],
+    ['844x390 soldier facing D', 422, 141.6, 64, true],
+    ['932x430 soldier facing D', 466, 156.1, 64, true],
+    ['844x390 soldier first view', 638.3, 126.4, 64, false],
+  ])('judges the measured %s', (_, x, y, width, dims) => {
+    expect(coachDimmed(COACH, board([pointMarkBox(x, y, width)]), 1000)).toBe(dims);
+  });
+
+  it('dims for any mark on the coach and not for marks that only touch its edge', () => {
+    const away = pointMarkBox(100, 300, 60);
+    expect(coachDimmed(COACH, board([away, pointMarkBox(400, 140, 60)]), 1000)).toBe(true);
+    expect(coachDimmed(COACH, board([{ left: 480, right: 540, top: 120, bottom: 136 }, { left: 300, right: 360, top: 160, bottom: 176 }]), 1000)).toBe(false);
+  });
+
+  it('dims only when the overlap reaches 5px both ways', () => {
+    const dims = (mark: Box) => coachDimmed(COACH, board([mark]), 1000);
+    expect(MARK_OVERLAP_MIN_PX).toBe(5);
+    expect(dims({ left: 300, right: 360, top: 155.01, bottom: 171.01 })).toBe(false);
+    expect(dims({ left: 300, right: 360, top: 155, bottom: 171 })).toBe(true);
+    expect(dims({ left: 300, right: 360, top: 104, bottom: 120 })).toBe(false);
+    expect(dims({ left: 300, right: 360, top: 105, bottom: 121 })).toBe(true);
+    expect(dims({ left: 476, right: 540, top: 130, bottom: 146 })).toBe(false);
+    expect(dims({ left: 475, right: 540, top: 130, bottom: 146 })).toBe(true);
+    expect(dims({ left: 230, right: 294, top: 130, bottom: 146 })).toBe(false);
+    expect(dims({ left: 230, right: 295, top: 130, bottom: 146 })).toBe(true);
+  });
+
+  it('stays plain with no marks, no coach or nothing published yet', () => {
+    expect(coachDimmed(COACH, board([]), 1000)).toBe(false);
+    expect(coachDimmed(null, board([pointMarkBox(400, 140, 60)]), 1000)).toBe(false);
+    expect(coachDimmed(COACH, new PointMarkBoard(), 0)).toBe(false);
+  });
+
+  it('comes back when the mark leaves the coach', () => {
+    const b = board([pointMarkBox(400, 140, 60)]);
+    expect(coachDimmed(COACH, b, 1000)).toBe(true);
+    b.publish([pointMarkBox(100, 300, 60)], 1016);
+    expect(coachDimmed(COACH, b, 1016)).toBe(false);
+  });
+
+  it('comes back when the HUD stops updating the marks', () => {
+    const b = board([pointMarkBox(400, 140, 60)]);
+    expect(coachDimmed(COACH, b, 1000 + MARK_STALE_MS)).toBe(true);
+    expect(coachDimmed(COACH, b, 1000 + MARK_STALE_MS + 1)).toBe(false);
+  });
+
+  it('comes back at once when the HUD clears the marks outside play', () => {
+    const b = board([pointMarkBox(400, 140, 60)]);
+    b.clear();
+    expect(coachDimmed(COACH, b, 1000)).toBe(false);
+  });
+
+  it('fades over 150 ms to a lower opacity and never takes pointer input', () => {
+    const css = readFileSync(join(__dirname, '..', '..', 'styles.css'), 'utf8');
+    const coach = css.match(/\.coach \{[^}]*\}/)![0];
+    expect(coach).toMatch(/pointer-events: none;/);
+    expect(coach).toMatch(/transition: opacity 150ms;/);
+    expect(css).toMatch(/\.coach\.dimmed \{ opacity: \.5; \}/);
   });
 });

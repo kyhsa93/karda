@@ -63,6 +63,40 @@ export class Coach {
   }
 }
 
+export const MARK_FONT_PX = 13;
+export const MARK_BORDER_PX = 3;
+export const MARK_STALE_MS = 2000;
+export const MARK_OVERLAP_MIN_PX = 5;
+
+export interface Box { left: number; right: number; top: number; bottom: number }
+
+export function pointMarkBox(x: number, y: number, textWidth: number): Box {
+  const half = (MARK_FONT_PX + MARK_BORDER_PX) / 2;
+  return { left: x - textWidth / 2, right: x + textWidth / 2, top: y - half, bottom: y + half };
+}
+
+export class PointMarkBoard {
+  boxes: readonly Box[] = [];
+  at = -Infinity;
+
+  publish(boxes: readonly Box[], now: number) {
+    this.boxes = boxes;
+    this.at = now;
+  }
+
+  clear() {
+    this.boxes = [];
+    this.at = -Infinity;
+  }
+}
+
+export function coachDimmed(coach: Box | null | undefined, marks: PointMarkBoard, now: number) {
+  if (!coach || now - marks.at > MARK_STALE_MS) return false;
+  return marks.boxes.some(m =>
+    Math.min(m.right, coach.right) - Math.max(m.left, coach.left) >= MARK_OVERLAP_MIN_PX
+    && Math.min(m.bottom, coach.bottom) - Math.max(m.top, coach.top) >= MARK_OVERLAP_MIN_PX);
+}
+
 export const DEATH_TIPS: Record<string, string> = {
   crewKilled: 'battle.tips.fire', rotorLoss: 'battle.tips.fire', terrain: 'battle.tips.terrain', tree: 'battle.tips.terrain', building: 'battle.tips.terrain',
   rotorStrike: 'battle.tips.terrain', water: 'battle.tips.terrain', outOfBounds: 'battle.tips.zone', hardLanding: 'battle.tips.landing',

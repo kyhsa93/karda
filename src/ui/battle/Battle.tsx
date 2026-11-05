@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { assets } from '../../assets/loader';
 import { HELI_GROUP } from '../../assets/manifest';
 import { t, tList } from '../../content/strings';
-import { cardDevice, Coach, coachText, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, type CoachFacts } from './coach';
+import { cardDevice, Coach, coachText, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, PointMarkBoard, type CoachFacts } from './coach';
+import { CoachBox } from './CoachBox';
 import { DeathReport } from './deathReport';
 import type { Settings, SortieRole } from '../../save/save';
 import { DIFFICULTIES } from '../../sim/difficulty';
@@ -31,7 +32,7 @@ const nextPaint = () => new Promise<void>(done => requestAnimationFrame(() => re
 export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, tips, onTip, lastRole, onRole }: {
   choice: BattleChoice; touch: boolean; settings: Settings; onSettings: (s: Settings) => void; onSetup: () => void; onTitle: () => void; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void;
 }) {
-  const [game, setGame] = useState<{ mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport } | null>(null);
+  const [game, setGame] = useState<{ mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport; marks: PointMarkBoard } | null>(null);
   const [round, setRound] = useState(0);
   const [renderer, setRenderer] = useState<FlightRenderer | null>(null);
   const raise = useRaiseInRender();
@@ -46,7 +47,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
       session.world.difficulty = DIFFICULTIES[settings.difficulty];
       session.world.conditions.time = choice.time;
       session.start();
-      setGame({ mod, session, runtime, death: new DeathReport(session) });
+      setGame({ mod, session, runtime, death: new DeathReport(session), marks: new PointMarkBoard() });
     })().catch(error => { if (alive) raise(error); });
     return () => { alive = false; };
   }, [choice, round]);
@@ -54,7 +55,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
   return (
     <BattleLoadBoundary strings="battle.matchError">
       <Flight key={round} session={game.session} touch={touch} settings={settings} onSettings={onSettings} onExit={onSetup} onRenderer={setRenderer}>
-        <BattleHud session={game.session} runtime={game.runtime} side={choice.side} renderer={renderer} touch={touch} death={game.death} />
+        <BattleHud session={game.session} runtime={game.runtime} side={choice.side} renderer={renderer} touch={touch} death={game.death} marks={game.marks} />
         <BattleOverlays game={game} side={choice.side} touch={touch} tips={tips} onTip={onTip} lastRole={lastRole} onRole={onRole} onAgain={() => { setGame(null); setRound(r => r + 1); }} onSetup={onSetup} onTitle={onTitle} />
       </Flight>
     </BattleLoadBoundary>
@@ -68,8 +69,8 @@ function squadLabel(label: string) {
   return n ? t('battle.deploy.spawnSquadN', { id, n }) : t('battle.deploy.spawnSquad', { id });
 }
 
-export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRole, onAgain, onSetup, onTitle }: { game: { mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport }; side: 'coalition' | 'veros'; touch: boolean; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void; onAgain: () => void; onSetup: () => void; onTitle: () => void }) {
-  const { session, runtime, mod, death } = game;
+export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRole, onAgain, onSetup, onTitle }: { game: { mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport; marks: PointMarkBoard }; side: 'coalition' | 'veros'; touch: boolean; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void; onAgain: () => void; onSetup: () => void; onTitle: () => void }) {
+  const { session, runtime, mod, death, marks } = game;
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [, tick] = useState(0);
   const tally = useRef({ kills: 0, deaths: 0, identified: 0, flips: 0, detected: 0, missileAt: -99, reason: undefined as string | undefined, missile: false, walked: 0, shots: 0, lastShot: -Infinity, at: null as { x: number; z: number } | null });
@@ -192,5 +193,5 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
       </div>
     );
   }
-  return line && (snap.mode === 'play') ? <div className="coach">{coachText(line, side, target)}</div> : null;
+  return line && (snap.mode === 'play') ? <CoachBox text={coachText(line, side, target)} marks={marks} /> : null;
 }
