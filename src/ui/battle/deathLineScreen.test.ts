@@ -51,6 +51,11 @@ function all(node: FakeNode, cls: string): FakeNode[] {
   return node.childNodes.flatMap(c => [...((c.attrs.class ?? '').split(' ').includes(cls) ? [c] : []), ...all(c, cls)]);
 }
 
+function press(node: FakeNode) {
+  const key = Object.keys(node).find(k => k.startsWith('__reactProps'))!;
+  (node as any)[key].onClick();
+}
+
 function fakeDom() {
   const doc: any = new FakeNode(9, '#document', null);
   doc.createElement = (type: string) => new FakeNode(1, type.toUpperCase(), doc);
@@ -82,15 +87,16 @@ describe('death line on screen (#227)', () => {
     vi.unstubAllGlobals();
   });
 
-  async function game() {
+  async function game(tips: readonly string[] = ['card.soldier', 'rules.dead']) {
     const mod = await loadBattle();
     const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 7 });
     session.start();
     const death = new DeathReport(session);
+    const onTip = vi.fn();
     root = createRoot(container as unknown as HTMLElement);
     root.render([
       createElement(BattleHud, { key: 'hud', session, runtime, side: 'coalition', renderer: null, touch: false, death, marks: new PointMarkBoard() }),
-      createElement(BattleOverlays, { key: 'overlays', game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: 'coalition', touch: false, tips: ['card.soldier', 'rules.dead'], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }),
+      createElement(BattleOverlays, { key: 'overlays', game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: 'coalition', touch: false, tips, onTip, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }),
     ]);
     await vi.waitFor(() => expect(all(container, 'battle-canvas').length).toBe(1));
     const enemy = session.world.units.find(u => u.defId === 'aaa_light' && u.side === 'veros')!;
@@ -102,7 +108,19 @@ describe('death line on screen (#227)', () => {
       expect(session.mode).toBe('crashed');
     };
     const radio = () => all(container, 'battle-radio').map(n => n.textContent);
-    return { session, runtime, enemy, steps, die, radio };
+    const redeploy = async () => {
+      while (session.mode !== 'deploy' || session.deployIn() > 0) session.step(STEP);
+      await vi.waitFor(() => expect(all(container, 'tip').length).toBeGreaterThan(0));
+    };
+    const go = async () => {
+      const button = () => all(container, 'go').find(b => b.attrs.class === 'go')!;
+      await vi.waitFor(() => expect(button().textContent).toBe(`${t('battle.deploy.go')} ▶`));
+      press(button());
+      expect(session.mode).toBe('play');
+    };
+    const cards = () => all(container, 'control-card').length;
+    const deadTip = () => container.textContent.includes(t('battle.tips.dead'));
+    return { session, runtime, enemy, steps, die, radio, onTip, redeploy, go, cards, deadTip };
   }
 
   const LINE = /^▲ VPA 대공 기관포 진지 · 소총 · [\d.]+k?m$/;
@@ -157,6 +175,46 @@ describe('death line on screen (#227)', () => {
     const flat = (n: FakeNode): FakeNode[] => n.childNodes.flatMap(c => [c, ...flat(c)]);
     const order = flat(container);
     expect(order.indexOf(all(container, 'tip').at(-1)!)).toBeLessThan(order.indexOf(all(container, 'setting-row')[0]));
+  });
+
+  it('hides the dead tip under the control card and leaves rules.dead for later (#312)', async () => {
+    const g = await game([]);
+    g.die();
+    await g.redeploy();
+    expect(g.cards()).toBe(1);
+    expect(g.deadTip()).toBe(false);
+    await g.go();
+    expect(g.onTip).toHaveBeenCalledWith('card.soldier');
+    expect(g.onTip).not.toHaveBeenCalledWith('rules.dead');
+  });
+
+  it('shows the dead tip and records rules.dead once no card shows (#312)', async () => {
+    const g = await game(['card.soldier']);
+    g.die();
+    await g.redeploy();
+    expect(g.cards()).toBe(0);
+    expect(g.deadTip()).toBe(true);
+    await g.go();
+    expect(g.onTip).toHaveBeenCalledWith('rules.dead');
+  });
+
+  it('shows and records no dead tip once rules.dead is recorded (#312)', async () => {
+    const g = await game(['card.soldier', 'rules.dead']);
+    g.die();
+    await g.redeploy();
+    expect(g.cards()).toBe(0);
+    expect(g.deadTip()).toBe(false);
+    await g.go();
+    expect(g.onTip).not.toHaveBeenCalledWith('rules.dead');
+  });
+
+  it('shows and records no dead tip before the first death (#312)', async () => {
+    const g = await game(['card.soldier']);
+    await vi.waitFor(() => expect(container.textContent).toContain(t('battle.deploy.title')));
+    expect(g.cards()).toBe(0);
+    expect(g.deadTip()).toBe(false);
+    await g.go();
+    expect(g.onTip).not.toHaveBeenCalledWith('rules.dead');
   });
 });
 
