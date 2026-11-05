@@ -65,7 +65,7 @@ export class Coach {
 
 export const MARK_FONT_PX = 13;
 export const MARK_BORDER_PX = 3;
-export const MARK_STALE_MS = 1000;
+export const MARK_STALE_MS = 2000;
 export const MARK_OVERLAP_MIN_PX = 5;
 
 export interface Box { left: number; right: number; top: number; bottom: number }
