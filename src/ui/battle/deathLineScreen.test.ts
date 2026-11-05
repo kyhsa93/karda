@@ -159,6 +159,47 @@ describe('death line on screen (#227)', () => {
   });
 });
 
+describe('soldier control card on the deploy screen (#208)', () => {
+  let root: Root;
+  let container: FakeNode;
+
+  beforeEach(() => { container = fakeDom(); });
+  afterEach(async () => {
+    root.unmount();
+    await new Promise(done => setTimeout(done, 20));
+    vi.unstubAllGlobals();
+  });
+
+  async function card(touch: boolean) {
+    const mod = await loadBattle();
+    const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 1 });
+    session.start();
+    const death = new DeathReport(session);
+    root = createRoot(container as unknown as HTMLElement);
+    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death }, side: 'coalition', touch, tips: [], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }));
+    await vi.waitFor(() => expect(all(container, 'control-card')).toHaveLength(1));
+    return all(container, 'control-card')[0].textContent;
+  }
+
+  it('shows the keys on the keyboard card', async () => {
+    vi.stubGlobal('navigator', { getGamepads: () => [] });
+    const text = await card(false);
+    expect(text).toContain('X 구급 상자');
+    expect(text).toContain('F 연막');
+  });
+
+  it('shows the button names on the touch card', async () => {
+    const text = await card(true);
+    expect(text).toContain(`${t('touch.medkit')} · ${t('touch.smoke')}`);
+    expect(text).not.toMatch(/[XF] (구급|연막)/);
+  });
+
+  it('leaves them off the pad card', async () => {
+    vi.stubGlobal('navigator', { getGamepads: () => [{ connected: true }] });
+    expect(await card(false)).not.toMatch(/구급|연막/);
+  });
+});
+
 describe('first coach line on screen (#230)', () => {
   let root: Root;
   let container: FakeNode;

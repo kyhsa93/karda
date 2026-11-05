@@ -157,6 +157,22 @@ describe('soldier aim assist and gamepad (B2-11)', () => {
     expect(mouse.soldierYaw).toBe(y2);
   });
 
+  it('has no pad button for the medkit or smoke on foot (#208)', async () => {
+    const { World } = await import('../sim/world');
+    const { FlightInput } = await import('./input');
+    const w = new World({ seed: 3 });
+    w.active = true;
+    w.spawnAvatar({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls: 'assault' });
+    const input = new FlightInput();
+    const commands: string[] = [];
+    input.onCommand = c => commands.push(c);
+    input.gamepads = () => [{ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: true })) }];
+    input.update(w, 0.05);
+    expect(commands).toContain('reload');
+    expect(commands).not.toContain('medkit');
+    expect(commands).not.toContain('smoke');
+  });
+
   it('moves, looks and fires with a gamepad on foot', async () => {
     const { World } = await import('../sim/world');
     const { FlightInput } = await import('./input');
