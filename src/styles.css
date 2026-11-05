@@ -245,12 +245,16 @@ button.mode:disabled { opacity: .45; cursor: default; }
 }
 .battle-hud .soldier-status { position: absolute; right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
   background: rgba(6, 12, 22, .6); border-radius: 8px; padding: 6px 12px; font-variant-numeric: tabular-nums; }
+.battle-hud .soldier-status > div { display: flex; gap: 10px; align-items: baseline; white-space: nowrap; }
 .battle-hud .soldier-status b { font-size: 18px; }
 .battle-hud .soldier-status b.low { color: #ef476f; }
 .battle-hud.touch .soldier-status { bottom: auto; top: calc(12px + env(safe-area-inset-top)); right: calc(180px + env(safe-area-inset-right)); flex-direction: row; gap: 10px; font-size: 13px; }
 .battle-hud.touch .soldier-status b { font-size: 14px; }
 .soldier-controls .soldier-gear { position: absolute; right: calc(12px + env(safe-area-inset-right)); top: calc(56px + env(safe-area-inset-top)); display: flex; gap: 8px; pointer-events: auto; }
-.soldier-controls .soldier-gear .tbtn { position: static; }
+.soldier-controls .soldier-gear .tbtn { position: static; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+.soldier-controls .soldier-gear .tbtn.swap { min-width: 66px; }
+.soldier-controls .soldier-gear .tbtn.medkit { min-width: 153px; }
+.soldier-controls .soldier-gear .tbtn.repair { min-width: 105px; }
 .soldier-controls .tbtn.stance { left: 190px; bottom: calc(40px + env(safe-area-inset-bottom)); }
 .soldier-controls .tbtn.ads { right: 250px; bottom: calc(60px + env(safe-area-inset-bottom)); }
 .soldier-controls .tbtn.fire { right: calc(40px + env(safe-area-inset-right)); bottom: calc(60px + env(safe-area-inset-bottom)); width: 72px; height: 72px; }

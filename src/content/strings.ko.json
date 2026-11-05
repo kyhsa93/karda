@@ -503,7 +503,7 @@
       "hp": "체력 {n}",
       "medkit": "구급 상자 {state}",
       "medkitReady": "준비",
-      "medkitActive": "{n}초",
+      "medkitActive": "작동 {n}초",
       "medkitWait": "재배치 {n}초",
       "smoke": "연막탄 {n}",
       "repair": "수리 도구 {state}",

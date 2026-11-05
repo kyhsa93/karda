@@ -75,6 +75,15 @@ export function pointMarkBox(x: number, y: number, textWidth: number): Box {
   return { left: x - textWidth / 2, right: x + textWidth / 2, top: y - half, bottom: y + half };
 }
 
+export const MARK_PANEL_GAP_PX = 4;
+
+export function clearOf(x: number, y: number, textWidth: number, panel: Box | null) {
+  if (!panel) return x;
+  const m = pointMarkBox(x, y, textWidth), gap = MARK_PANEL_GAP_PX;
+  const hit = Math.min(m.right, panel.right + gap) - Math.max(m.left, panel.left - gap) > 0 && Math.min(m.bottom, panel.bottom + gap) - Math.max(m.top, panel.top - gap) > 0;
+  return hit ? panel.left - textWidth / 2 - MARK_PANEL_GAP_PX : x;
+}
+
 export class PointMarkBoard {
   boxes: readonly Box[] = [];
   at = -Infinity;

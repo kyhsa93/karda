@@ -20,6 +20,7 @@ import { sightPoint } from '../../sim/weapons/ballistics';
 import { hellfireSolution } from '../../sim/weapons/hellfire';
 import { rocketSolution } from '../../sim/weapons/rockets';
 import { CLASS_KITS } from '../../sim/infantry/arms';
+import { gearButtons } from '../battle/hud/soldierStatus';
 import { PREVENT_DEFAULT, type Command } from '../../input/bindings';
 import { roleCommand, roleOf, wantsPointerLock } from '../../input/roles';
 import { FlightInput } from '../../input/input';
@@ -218,7 +219,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
         }
         log.tick(simDt);
         setTadsOn(sim.tads.active);
-        if (touchRef.current) setTouchKey(`${sim.player.engineOn}|${sim.player.landed}|${sim.arms.selected}|${sim.fcr.unlocked}|${sim.cm.chaffUnlocked}`);
+        if (touchRef.current) setTouchKey(`${sim.player.engineOn}|${sim.player.landed}|${sim.arms.selected}|${sim.fcr.unlocked}|${sim.cm.chaffUnlocked}${sim.avatar.kind === 'soldier' ? `|${sim.soldier?.stance}|${Object.values(gearButtons(sim)).join('|')}` : ''}`);
         const farp = session.mode === 'play' && sim.avatar.kind === 'heli' && h.alive && h.landed && farpUnder(sim) >= 0;
         setAtFarp(farp);
         if (farp) setFarpTick(n => (n + 1) % 1000);
@@ -332,6 +333,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
     onPointerUp: () => set(false), onPointerCancel: () => set(false), onPointerLeave: () => set(false),
   });
 
+  const gear = gearButtons(sim);
+
   return (
     <div className={`flight3d${touch ? ' touch' : ''}${session.respawns ? ' battle' : ''}`}>
       <div
@@ -365,12 +368,12 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
           <VirtualStick className={`stick left size-${settings.controls.touchStickSize}`} radius={STICK_RADIUS[settings.controls.touchStickSize]} label={t('touch.moveStick')} onMove={(x, y) => { input.touch.lx = x; input.touch.ly = y; }} />
           <button className="tbtn pause" aria-label={t('touch.pause')} onPointerDown={press(() => setHelp(true))}>≡</button>
           <div className="soldier-gear">
-            <button className="tbtn" onPointerDown={press(() => runCommand(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? 'weapon2' : 'weapon1'))}>{t(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? (sim.soldierArms.ammo.at_rocket ? 'touch.toRocket' : 'touch.toGrenade') : 'touch.toRifle')}</button>
+            <button className="tbtn swap" onPointerDown={press(() => runCommand(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? 'weapon2' : 'weapon1'))}>{gear.swap}</button>
             <button className="tbtn" onPointerDown={press(() => runCommand('reload'))}>{t('touch.reload')}</button>
-            {sim.soldierGear.medkitLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('medkit'))}>{t('touch.medkit')}</button>}
-            {sim.soldierGear.repairable && <button className="tbtn" {...hold(on => { input.touchRepair = on; })}>{t('touch.repair')}</button>}
-            {sim.soldierGear.mineLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('mine'))}>{t('touch.mine')}</button>}
-            {sim.soldierGear.smokeLeft > 0 && <button className="tbtn" onPointerDown={press(() => runCommand('smoke'))}>{t('touch.smoke')}</button>}
+            {gear.medkit && <button className="tbtn medkit" onPointerDown={press(() => runCommand('medkit'))}>{gear.medkit}</button>}
+            {gear.repair && <button className="tbtn repair" {...hold(on => { input.touchRepair = on; })}>{gear.repair}</button>}
+            {gear.mine && <button className="tbtn" onPointerDown={press(() => runCommand('mine'))}>{gear.mine}</button>}
+            {gear.smoke && <button className="tbtn" onPointerDown={press(() => runCommand('smoke'))}>{gear.smoke}</button>}
           </div>
           <button className="tbtn stance" {...stanceHold()}>{t(`touch.stance.${sim.soldier?.stance ?? 'stand'}`)}</button>
           <button className={`tbtn ads${input.touchAds ? ' on' : ''}`} onPointerDown={press(() => { input.touchAds = !input.touchAds; setTouchKey(k => k + 'a'); })}>{t('touch.ads')}</button>
