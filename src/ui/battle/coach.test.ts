@@ -209,7 +209,7 @@ describe('first coach line says how to win and where to go (#230)', () => {
     it(`puts the target first and the win condition after it for ${side}`, () => {
       const line = coachText('rules.points', side, 'D');
       expect(line.startsWith('D ')).toBe(true);
-      expect(line).toContain('상대 티켓 0이면 승리');
+      expect(line).toContain('적 티켓 0이면 승리');
     });
 
     it(`still reads as a sentence with no target for ${side}`, () => {
@@ -217,7 +217,7 @@ describe('first coach line says how to win and where to go (#230)', () => {
       expect(line).not.toMatch(/[{}]|undefined|null/);
       expect(line.startsWith(' ')).toBe(false);
       expect(line.startsWith('거점을 지키세요')).toBe(true);
-      expect(line).toContain('상대 티켓 0이면 승리');
+      expect(line).toContain('적 티켓 0이면 승리');
     });
 
     it(`keeps the point symbol legend with the sides the right way round for ${side}`, () => {
@@ -255,9 +255,9 @@ describe('first coach line says how to win and where to go (#230)', () => {
     expect(COACH_STEPS[0].id).toBe('rules.points');
   });
 
-  it('names the look control on the keyboard and pad soldier cards', () => {
-    expect(tList('battle.card.soldier.keyboard').join(' ')).toContain('마우스 시점');
-    expect(tList('battle.card.soldier.pad').join(' ')).toContain('오른쪽 스틱 시점');
+  it('names the head control on the keyboard and pad soldier cards', () => {
+    expect(tList('battle.card.soldier.keyboard').join(' ')).toContain('마우스로 고개');
+    expect(tList('battle.card.soldier.pad').join(' ')).toContain('오른쪽 스틱 고개');
     expect(tList('battle.card.soldier.touch').join(' ')).toContain('화면 드래그로 고개');
   });
 });
