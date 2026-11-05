@@ -157,20 +157,133 @@ describe('soldier aim assist and gamepad (B2-11)', () => {
     expect(mouse.soldierYaw).toBe(y2);
   });
 
-  it('has no pad button for the medkit or smoke on foot (#208)', async () => {
-    const { World } = await import('../sim/world');
-    const { FlightInput } = await import('./input');
-    const w = new World({ seed: 3 });
-    w.active = true;
-    w.spawnAvatar({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls: 'assault' });
-    const input = new FlightInput();
-    const commands: string[] = [];
-    input.onCommand = c => commands.push(c);
-    input.gamepads = () => [{ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: true })) }];
-    input.update(w, 0.05);
-    expect(commands).toContain('reload');
-    expect(commands).not.toContain('medkit');
-    expect(commands).not.toContain('smoke');
+  describe('pad gear on foot (#300)', () => {
+    const LEFT = 14, RB = 5, RIGHT = 15;
+
+    async function padSoldier(cls: 'assault' | 'engineer' | 'support' | 'recon') {
+      const { World } = await import('../sim/world');
+      const { FlightInput } = await import('./input');
+      const w = new World({ seed: 3 });
+      w.active = true;
+      w.spawnAvatar({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls });
+      const input = new FlightInput();
+      const commands: string[] = [];
+      input.onCommand = c => commands.push(c);
+      const buttons = Array.from({ length: 17 }, () => ({ pressed: false }));
+      input.gamepads = () => [{ connected: true, axes: [0, 0, 0, 0], buttons }];
+      const tap = (i: number) => {
+        commands.length = 0;
+        buttons[i].pressed = true; input.update(w, 0.05);
+        buttons[i].pressed = false; input.update(w, 0.05);
+        return [...commands];
+      };
+      return { w, input, buttons, commands, tap };
+    }
+
+    it('binds the assault gear: left medkit, RB smoke, right grenade', async () => {
+      const { tap } = await padSoldier('assault');
+      expect(tap(LEFT)).toEqual(['medkit']);
+      expect(tap(RB)).toEqual(['smoke']);
+      expect(tap(RIGHT)).toEqual(['weapon2']);
+    });
+
+    it('binds the engineer gear: left held repair, RB mine, right rocket', async () => {
+      const { w, input, buttons, tap } = await padSoldier('engineer');
+      expect(tap(RB)).toEqual(['mine']);
+      expect(tap(RIGHT)).toEqual(['weapon2']);
+      expect(w.soldierCommands.repair).toBe(false);
+      buttons[LEFT].pressed = true;
+      input.update(w, 0.05);
+      expect(w.soldierCommands.repair).toBe(true);
+      input.update(w, 0.05);
+      expect(w.soldierCommands.repair).toBe(true);
+      buttons[LEFT].pressed = false;
+      input.update(w, 0.05);
+      expect(w.soldierCommands.repair).toBe(false);
+      expect(tap(LEFT)).toEqual([]);
+    });
+
+    it('does not repair for an assault soldier holding left', async () => {
+      const { w, input, buttons } = await padSoldier('assault');
+      buttons[LEFT].pressed = true;
+      input.update(w, 0.05);
+      expect(w.soldierCommands.repair).toBe(false);
+    });
+
+    it.each(['support', 'recon'] as const)('does nothing for a %s with no tool', async cls => {
+      const { w, input, buttons, tap } = await padSoldier(cls);
+      expect(tap(LEFT)).toEqual([]);
+      expect(tap(RB)).toEqual([]);
+      buttons[LEFT].pressed = true;
+      input.update(w, 0.05);
+      expect(w.soldierCommands.repair).toBe(false);
+    });
+
+    it('does nothing once the smoke or the mines run out', async () => {
+      const assault = await padSoldier('assault');
+      assault.w.soldierGear.smokeLeft = 0;
+      expect(assault.tap(RB)).toEqual([]);
+      const engineer = await padSoldier('engineer');
+      engineer.w.soldierGear.mineLeft = 0;
+      expect(engineer.tap(RB)).toEqual([]);
+    });
+
+    it('leaves the medkit alone while one is placed or waiting to redeploy', async () => {
+      const { w, tap } = await padSoldier('assault');
+      expect(w.placeMedkit()).toBe(true);
+      const placed = w.soldierGear.medkit;
+      tap(LEFT);
+      expect(w.placeMedkit()).toBe(false);
+      expect(w.soldierGear.medkit).toBe(placed);
+      w.soldierGear.medkit = null;
+      w.soldierGear.readyAt = w.time + 30;
+      tap(LEFT);
+      expect(w.placeMedkit()).toBe(false);
+      expect(w.soldierGear.medkit).toBeNull();
+    });
+
+    it('keeps the other pad inputs on foot as they were', async () => {
+      const { tap } = await padSoldier('assault');
+      expect([1, 2, 3, 4, 12, 9].map(i => tap(i))).toEqual([['crouch'], ['reload'], ['enter'], ['spot'], ['weapon1'], ['pause']]);
+      expect([0, 6, 7, 8, 10, 11, 13, 16].flatMap(i => tap(i))).toEqual([]);
+    });
+
+    it('does not spend gear on a button held from before the sortie', async () => {
+      const { World } = await import('../sim/world');
+      const { FlightInput } = await import('./input');
+      const w = new World({ seed: 3 });
+      w.active = true;
+      const input = new FlightInput();
+      const commands: string[] = [];
+      input.onCommand = c => commands.push(c);
+      const buttons = Array.from({ length: 17 }, () => ({ pressed: false }));
+      buttons[RB].pressed = true;
+      input.gamepads = () => [{ connected: true, axes: [0, 0, 0, 0], buttons }];
+      input.update(w, 0.05);
+      w.spawnAvatar({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls: 'assault' });
+      commands.length = 0;
+      input.update(w, 0.05);
+      expect(commands).toEqual([]);
+      buttons[RB].pressed = false;
+      input.update(w, 0.05);
+      buttons[RB].pressed = true;
+      input.update(w, 0.05);
+      expect(commands).toEqual(['smoke']);
+    });
+
+    it('keeps the helicopter pad buttons', async () => {
+      const { World } = await import('../sim/world');
+      const { FlightInput } = await import('./input');
+      const w = new World({ seed: 3 });
+      w.active = true;
+      const input = new FlightInput();
+      const commands: string[] = [];
+      input.onCommand = c => commands.push(c);
+      input.gamepads = () => [{ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === RB || i === LEFT || i === RIGHT })) }];
+      input.update(w, 0.05);
+      expect(commands).toEqual(['padRB', 'weaponPrev', 'weaponNext']);
+      expect(w.soldierCommands.repair).toBe(false);
+    });
   });
 
   it('moves, looks and fires with a gamepad on foot', async () => {

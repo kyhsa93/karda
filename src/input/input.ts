@@ -101,6 +101,7 @@ export class FlightInput {
         if (cmd && on && !this.padButtons[i]) this.onCommand?.(cmd);
       });
       this.padButtons = pressed;
+      this.padSoldier = pressed;
       padFire = pressed[7] ?? false;
       padLaser = pressed[6] ?? false;
     }
@@ -122,7 +123,7 @@ export class FlightInput {
     const k = SOLDIER_KEYS, c = world.soldierCommands;
     let fwd = (this.heldKeys(k.forward) ? 1 : 0) - (this.heldKeys(k.back) ? 1 : 0) - this.touch.ly;
     let right = (this.heldKeys(k.right) ? 1 : 0) - (this.heldKeys(k.left) ? 1 : 0) + this.touch.lx;
-    let padFire = false, padAds = false, padSprint = false, padJump = false;
+    let padFire = false, padAds = false, padSprint = false, padJump = false, padRepair = false;
     const gp = Array.from(this.gamepads() ?? []).find(p => p && p.connected);
     if (gp) {
       right += dz(gp.axes[0] ?? 0); fwd += -dz(gp.axes[1] ?? 0);
@@ -138,7 +139,12 @@ export class FlightInput {
       if (edge(3)) this.onCommand?.('enter');
       if (edge(4)) this.onCommand?.('spot');
       if (edge(12)) this.onCommand?.('weapon1');
-      if (edge(14) || edge(15)) this.onCommand?.('weapon2');
+      if (edge(15)) this.onCommand?.('weapon2');
+      const gear = world.soldierGear;
+      if (edge(14) && gear.medkitLeft > 0) this.onCommand?.('medkit');
+      if (edge(5) && gear.smokeLeft > 0) this.onCommand?.('smoke');
+      if (edge(5) && gear.mineLeft > 0) this.onCommand?.('mine');
+      padRepair = gear.repairable && (pressed[14] ?? false);
       if (edge(9)) this.onCommand?.('pause');
       this.padSoldier = pressed;
     }
@@ -147,7 +153,7 @@ export class FlightInput {
     c.sprint = this.heldKeys(k.sprint) || padSprint || Math.hypot(this.touch.lx, this.touch.ly) > 0.95;
     c.jump = this.heldKeys(k.jump) || padJump;
     c.fire = this.mouseFire || this.touchFire || padFire;
-    c.repair = this.heldKeys(k.repair) || this.touchRepair;
+    c.repair = this.heldKeys(k.repair) || this.touchRepair || padRepair;
     c.ads = this.mouseAds || this.touchAds || padAds;
     this.assist(world, dt, !!gp || this.touchUsed);
     c.yaw = this.soldierYaw;

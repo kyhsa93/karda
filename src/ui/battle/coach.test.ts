@@ -287,8 +287,55 @@ describe('soldier control card names the gear (#208)', () => {
     expect(items('touch')).toEqual(expect.arrayContaining([t('touch.medkit'), t('touch.smoke')]));
   });
 
-  it('keeps the gear off the pad card, which has no input for it', () => {
-    expect(items('pad').join(' ')).not.toMatch(/구급|연막/);
+  describe('pad card matches the pad bindings (#300)', () => {
+    const PAD_BUTTONS: Readonly<Record<string, number>> = { A: 0, B: 1, X: 2, LB: 4, RB: 5, LT: 6, RT: 7, L3: 10, '십자 ↑': 12, '←': 14, '→': 15 };
+    const PAD_COMMANDS: Readonly<Record<string, Command>> = {
+      '재장전': 'reload', '앉기': 'crouch', '소총': 'weapon1', '유탄': 'weapon2', '적 표시': 'spot',
+      [t('touch.medkit')]: 'medkit', [t('touch.smoke')]: 'smoke',
+    };
+    const PAD_HELD: Readonly<Record<string, 'sprint' | 'jump' | 'fire' | 'ads'>> = { '질주': 'sprint', '넘기': 'jump', '사격': 'fire', '조준': 'ads' };
+    const printed = () => items('pad').filter(i => !i.includes('스틱')).map(i => {
+      const [, key, label] = /^(십자 \S+|\S+) (.+)$/.exec(i) ?? [];
+      return [key, label];
+    });
+
+    async function press(button: number) {
+      const { World } = await import('../../sim/world');
+      const { FlightInput } = await import('../../input/input');
+      const w = new World({ seed: 3 });
+      w.active = true;
+      w.spawnAvatar({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls: 'assault' });
+      const input = new FlightInput();
+      const commands: Command[] = [];
+      input.onCommand = c => commands.push(c);
+      input.gamepads = () => [{ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === button })) }];
+      input.update(w, 0.05);
+      return { commands, soldier: w.soldierCommands };
+    }
+
+    it('prints every item the pad card can name', () => {
+      expect(printed().map(([, label]) => label).sort()).toEqual([...Object.keys(PAD_COMMANDS), ...Object.keys(PAD_HELD)].sort());
+    });
+
+    it('does what each printed pad item says', async () => {
+      for (const [key, label] of printed()) {
+        const button = PAD_BUTTONS[key];
+        expect(button, key).toBeTypeOf('number');
+        const { commands, soldier } = await press(button);
+        if (PAD_HELD[label]) expect(soldier[PAD_HELD[label]], `${key} ${label}`).toBe(true);
+        else expect(commands, `${key} ${label}`).toEqual([PAD_COMMANDS[label]]);
+      }
+    });
+
+    it('prints every pad button that does something, except pause and the unused enter', async () => {
+      const onCard = new Set(printed().map(([key]) => PAD_BUTTONS[key]));
+      for (let i = 0; i < 17; i++) {
+        const { commands } = await press(i);
+        if (i === 3) expect(commands).toEqual(['enter']);
+        else if (i === 9) expect(commands).toEqual(['pause']);
+        else if (commands.length) expect(onCard.has(i), `button ${i} ${commands}`).toBe(true);
+      }
+    });
   });
 });
 

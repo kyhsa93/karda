@@ -194,9 +194,13 @@ describe('soldier control card on the deploy screen (#208)', () => {
     expect(text).not.toMatch(/[XF] (구급|연막)/);
   });
 
-  it('leaves them off the pad card', async () => {
+  it('shows the pad buttons on the pad card (#300)', async () => {
     vi.stubGlobal('navigator', { getGamepads: () => [{ connected: true }] });
-    expect(await card(false)).not.toMatch(/구급|연막/);
+    const text = await card(false);
+    expect(text).toContain(`← ${t('touch.medkit')}`);
+    expect(text).toContain('→ 유탄');
+    expect(text).toContain(`RB ${t('touch.smoke')}`);
+    expect(text).not.toMatch(/[XF] (구급|연막)|←→/);
   });
 });
 
