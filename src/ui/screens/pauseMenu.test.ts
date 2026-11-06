@@ -3,13 +3,14 @@ import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import harekRaw from '../../content/battle/maps/harek.json?raw';
 import { hasString, t, tPairs } from '../../content/strings';
+import { defaultSettings } from '../../save/save';
 import type { BattleMapDef } from '../../sim/battle/schema';
 import { STEP } from '../../sim/world';
 import { loadBattle } from '../battle/loadBattle';
 import { Flight } from './Flight';
 
 vi.mock('../../assets/loader', () => ({ assets: { loadGroup: async () => ({ loaded: [] }), get: () => null } }));
-vi.mock('../../audio/game', () => ({ GameAudio: class { voice = { enabled: false }; setVolume() {} async loadSamples() {} async resume() {} dispose() {} } }));
+vi.mock('../../audio/game', () => ({ GameAudio: class { voice = { enabled: false }; constructor() { (globalThis as Record<string, unknown>).__audio = this; } setVolume() {} async loadSamples() {} async resume() {} dispose() {} } }));
 vi.mock('../../render/renderer', () => ({
   FlightRenderer: class {
     applySettings() {}
@@ -113,7 +114,8 @@ describe('pause menu (#234)', () => {
     const buttons = () => all(container, 'pause-buttons')[0].childNodes;
     const labels = () => buttons().map(b => b.textContent);
     const pressLabel = async (label: string) => { reactProps(buttons().find(b => b.textContent === label)!).onClick(); await settle(); };
-    return { session, runtime, world, onExit, labels, pressLabel };
+    const classes = () => buttons().map(b => b.attrs.class);
+    return { session, runtime, world, onExit, labels, pressLabel, classes };
   }
 
   it('gives the keyboard soldier exactly continue, controls, settings and quit', async () => {
@@ -145,6 +147,13 @@ describe('pause menu (#234)', () => {
     expect(world.player.engineOn).toBe(!before);
   });
 
+  it.each([[false, 'soldier'], [true, 'soldier'], [true, 'heli']] as const)('marks only the last button, quit, as the danger one (touch %s, %s)', async (touch, role) => {
+    const { labels, classes } = await paused(touch, role);
+    expect(labels().at(-1)).toBe(t('pause.quit'));
+    expect(classes().at(-1)).toBe('go secondary danger');
+    expect(classes().slice(0, -1).filter(c => c.includes('danger'))).toEqual([]);
+  });
+
   it('keeps the match as it is through the other buttons, and quits through the same exit', async () => {
     const { runtime, session, onExit, labels, pressLabel } = await paused(false, 'soldier');
     runtime.conquest.tickets.coalition = 179;
@@ -159,6 +168,24 @@ describe('pause menu (#234)', () => {
     expect(onExit).not.toHaveBeenCalled();
     await pressLabel(t('pause.quit'));
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies a voice warning change from the settings to the running audio, with no menu button for it', async () => {
+    const mod = await loadBattle();
+    const { session } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 1 });
+    session.start();
+    session.deploy({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls: 'assault' });
+    const on = defaultSettings();
+    const off = { ...on, voiceWarnings: false };
+    const audio = () => (globalThis as Record<string, unknown>).__audio as { voice: { enabled: boolean } } | undefined;
+    delete (globalThis as Record<string, unknown>).__audio;
+    root = createRoot(container as unknown as HTMLElement);
+    root.render(createElement(Flight, { session, touch: false, settings: on, onExit: () => {} }));
+    await vi.waitFor(() => expect(audio()?.voice.enabled).toBe(true));
+    root.render(createElement(Flight, { session, touch: false, settings: off, onExit: () => {} }));
+    await vi.waitFor(() => expect(audio()!.voice.enabled).toBe(false));
+    root.render(createElement(Flight, { session, touch: false, settings: on, onExit: () => {} }));
+    await vi.waitFor(() => expect(audio()!.voice.enabled).toBe(true));
   });
 
   it('drops the restart and voice strings and the restart note on Esc', () => {

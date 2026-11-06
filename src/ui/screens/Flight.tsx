@@ -430,7 +430,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
               <button className="go secondary" onClick={() => setShowSettings(v => !v)}>{t('pause.settings')}</button>
               {touch && sim.avatar.kind === 'heli' && <button className="go secondary" onClick={() => { toggleView(); setHelp(false); }}>{t('pause.view')}</button>}
               {touch && sim.avatar.kind === 'heli' && <button className="go secondary" onClick={() => sim.toggleEngine()}>{t(sim.player.engineOn ? 'pause.engineOff' : 'pause.engineOn')}</button>}
-              <button className="go secondary" onClick={onExit}>{t('pause.quit')}</button>
+              <button className="go secondary danger" onClick={onExit}>{t('pause.quit')}</button>
             </div>
             {showSettings && <SettingsPanel settings={settings} onChange={s2 => onSettings?.(s2)} />}
             {showKeys && (
