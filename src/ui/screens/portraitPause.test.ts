@@ -68,7 +68,7 @@ function all(node: FakeNode, cls: string): FakeNode[] {
 const reactProps = (node: FakeNode) => (node as unknown as Record<string, Record<string, (e?: unknown) => void>>)[Object.keys(node).find(k => k.startsWith('__reactProps'))!];
 const harek = JSON.parse(harekRaw) as BattleMapDef;
 const settle = (ms = 20) => new Promise(done => setTimeout(done, ms));
-const ROTATE = '가로로 돌려 주세요 — 전투는 가로 화면에서만 합니다';
+const ROTATE = '가로로 돌려 주세요 — 그동안 전장은 멈춰 있습니다';
 
 describe('portrait notice pauses the match (#235)', () => {
   let root: Root | undefined;
@@ -127,7 +127,7 @@ describe('portrait notice pauses the match (#235)', () => {
     return { session, world, spawn, turn, steps, notice, rootClass, renderer };
   }
 
-  it('tells a battle player, soldier or pilot, to turn the phone for the fight, not for flying', () => {
+  it('tells a battle player, soldier or pilot, to turn the phone and that the match waits', () => {
     expect(t('flight.rotate')).toBe(ROTATE);
   });
 
@@ -165,6 +165,37 @@ describe('portrait notice pauses the match (#235)', () => {
     reactProps(all(container, 'pause-buttons')[0].childNodes.find(b => b.textContent === t('brief.continue'))!).onClick();
     await settle();
     expect(session.paused).toBe(false);
+  });
+
+  it('draws no portrait notice under the open menu, and shows it once the menu closes, paused throughout', async () => {
+    const { session, world, steps, notice, rootClass } = await battle();
+    expect(notice()).toHaveLength(1);
+    reactProps(all(container, 'pause')[0]).onPointerDown({ preventDefault() {}, stopPropagation() {} });
+    await vi.waitFor(() => expect(all(container, 'pause-buttons')).toHaveLength(1));
+    expect(notice()).toHaveLength(0);
+    expect(session.paused).toBe(true);
+    expect(rootClass()).toContain('rotate');
+    const t0 = world.time;
+    steps(1);
+    expect(world.time).toBe(t0);
+    reactProps(all(container, 'pause-buttons')[0].childNodes.find(b => b.textContent === t('brief.continue'))!).onClick();
+    await settle();
+    expect(all(container, 'pause-buttons')).toHaveLength(0);
+    expect(notice()).toHaveLength(1);
+    expect(session.paused).toBe(true);
+    steps(1);
+    expect(world.time).toBe(t0);
+  });
+
+  it('draws no portrait notice when turned to portrait with the menu already open', async () => {
+    const { session, turn, notice, rootClass } = await battle();
+    await turn(844, 390);
+    reactProps(all(container, 'pause')[0]).onPointerDown({ preventDefault() {}, stopPropagation() {} });
+    await vi.waitFor(() => expect(all(container, 'pause-buttons')).toHaveLength(1));
+    await turn(390, 844);
+    expect(notice()).toHaveLength(0);
+    expect(rootClass()).toContain('rotate');
+    expect(session.paused).toBe(true);
   });
 
   it('keeps the pause through a turn while the GL context is lost, until it comes back', async () => {

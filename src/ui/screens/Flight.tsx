@@ -357,7 +357,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       )}
       <div className="messages" ref={msgRef} />
       <div className="radio-sub" ref={radioRef} style={{ display: 'none' }} />
-      {portrait && snap.mode === 'play' && <div className="overlay"><div className="card"><h1>↻</h1><p className="sub">{t('flight.rotate')}</p></div></div>}
+      {portrait && snap.mode === 'play' && !help && <div className="overlay"><div className="card"><h1>↻</h1><p className="sub">{t('flight.rotate')}</p></div></div>}
       {atFarp && <FarpMenu world={sim} />}
       <div className="hint" ref={hintRef} />
 
