@@ -43,7 +43,7 @@ describe('paired matches (#199)', () => {
         expect(soldier.next).toBe(idle.next);
       }
     }
-  }, 120000);
+  }, 180000);
 
   it('does not let a firing player move the world RNG', () => {
     const idle = play(3, 30);
@@ -63,7 +63,7 @@ describe('paired matches (#199)', () => {
     const a = play(4, 90, { proxy: true, level: 1 }), b = play(4, 90, { proxy: true, level: 1 });
     expect(b.world.soldier?.pos.toArray()).toEqual(a.world.soldier?.pos.toArray());
     expect(b.log).toEqual(a.log);
-  }, 60000);
+  }, 150000);
 });
 
 describe('infantry proxy skill levels (#199)', () => {

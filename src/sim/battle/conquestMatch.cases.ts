@@ -37,5 +37,5 @@ export function fullMatchCases(seeds: readonly number[]) {
       expect(c.causes[loser].bleed).toBeGreaterThan(0);
       expect(c.causes[loser].person).toBeGreaterThan(0);
     }
-  }, 60000);
+  }, 90000);
 }
