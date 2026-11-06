@@ -7,6 +7,7 @@ import { CoachBox } from './CoachBox';
 import { DeathReport } from './deathReport';
 import type { Settings, SortieRole } from '../../save/save';
 import { DIFFICULTIES } from '../../sim/difficulty';
+import type { CrashReason } from '../../sim/events';
 import type { FlightSession } from '../../sim/session';
 import { Flight } from '../screens/Flight';
 import type { BattleChoice } from './BattleSetup';
@@ -73,7 +74,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
   const { session, runtime, mod, death, marks } = game;
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [, tick] = useState(0);
-  const tally = useRef({ kills: 0, deaths: 0, identified: 0, flips: 0, detected: 0, missileAt: -99, reason: undefined as string | undefined, missile: false, walked: 0, shots: 0, lastShot: -Infinity, at: null as { x: number; z: number } | null });
+  const tally = useRef({ kills: 0, deaths: 0, identified: 0, flips: 0, detected: 0, missileAt: -99, reason: undefined as CrashReason | undefined, missile: false, walked: 0, shots: 0, lastShot: -Infinity, at: null as { x: number; z: number } | null });
   useEffect(() => session.world.events.onAny(e => {
     const T = tally.current, now = session.world.time;
     if (e.t === 'unitDestroyed' && e.byPlayer) T.kills++;
