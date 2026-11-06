@@ -400,6 +400,29 @@ describe('play again (#265)', () => {
     await vi.waitFor(() => expect(renderers).toHaveLength(2), { timeout: 30_000 });
   }, 90_000);
 
+  it('starts the next match with no deaths or tips carried over from a death in the last one (#234)', async () => {
+    type World = { units: { id: number; side: string; defId: string }[]; emit(e: unknown): void };
+    const tips = () => {
+      const all = (n: typeof dom.container): (typeof dom.container)[] => n.childNodes.flatMap(c => [...((c.attrs.class ?? '').split(' ').includes('tip') ? [c] : []), ...all(c)]);
+      return all(dom.container).length;
+    };
+    const session = renderers.at(-1)!.opts.session as FakeSession & { world: World; deployIn(): number };
+    await vi.waitFor(() => expect(shown()).toContain(GO));
+    press(buttons(dom.container).find(b => b.textContent.includes(GO))!);
+    const enemy = session.world.units.find(u => u.side === 'veros' && u.defId === 'aaa_light')!;
+    session.world.emit({ t: 'playerHit', by: enemy.id, weapon: 'g_rifle', damage: 1000 });
+    for (let i = 0; i < 40_000 && (session.mode !== 'deploy' || session.deployIn() > 0); i++) session.step(1 / 120);
+    await vi.waitFor(() => expect(tips()).toBeGreaterThan(0));
+    await finishMatch();
+    expect(shown()).toContain(t('battle.report.deaths', { n: 1 }));
+    pressAgain();
+    await vi.waitFor(() => expect(renderers).toHaveLength(2), { timeout: 30_000 });
+    await vi.waitFor(() => expect(shown()).toContain(GO));
+    expect(tips()).toBe(0);
+    await finishMatch();
+    expect(shown()).toContain(t('battle.report.deaths', { n: 0 }));
+  }, 90_000);
+
   it('keeps the seed at the clock plus the round', async () => {
     for (let press = 0; press < 2; press++) {
       await finishMatch();
@@ -578,7 +601,7 @@ describe('losing the WebGL context during the match (#268)', () => {
     await vi.waitFor(() => expect(text()).toContain(t('pause.title')));
     await lose(PAUSED);
     await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
-    pressLabelled(t('brief.toList'));
+    pressLabelled(t('pause.quit'));
     await vi.waitFor(() => expect(text()).toContain(DEPLOY));
     expect(renderer!.dispose).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
