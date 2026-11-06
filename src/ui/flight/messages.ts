@@ -1,6 +1,7 @@
 import { t } from '../../content/strings';
 import { MS_TO_FPM, MS_TO_KT } from '../../core/units';
 import type { CrashReason, SimEvent } from '../../sim/events';
+import type { Mode } from '../../sim/session';
 
 export interface Message { text: string; color: string; life: number }
 
@@ -50,6 +51,10 @@ export class MessageLog {
   tick(simDt: number) {
     for (const m of this.items) m.life -= simDt;
     this.items = this.items.filter(m => m.life > 0);
+  }
+
+  follow(mode: Mode) {
+    if (mode !== 'play' && mode !== 'crashed') this.clear();
   }
 
   clear() {

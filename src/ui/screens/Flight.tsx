@@ -216,6 +216,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
           missionRef.current.style.color = '#06d6a0';
         }
         log.tick(simDt);
+        log.follow(session.mode);
         setTadsOn(sim.tads.active);
         if (touchRef.current) setTouchKey(`${sim.player.engineOn}|${sim.player.landed}|${sim.arms.selected}|${sim.fcr.unlocked}|${sim.cm.chaffUnlocked}${sim.avatar.kind === 'soldier' ? `|${sim.soldier?.stance}|${Object.values(gearButtons(sim)).join('|')}` : ''}`);
         const farp = session.mode === 'play' && sim.avatar.kind === 'heli' && h.alive && h.landed && farpUnder(sim) >= 0;
