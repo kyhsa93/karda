@@ -553,4 +553,11 @@ describe('desktop radio line', () => {
   it('keeps the touch radio where the touch layout put it', () => {
     expect(px(rule('.battle-hud.touch .battle-radio'), 'bottom')).toBe(150);
   });
+
+  it('drops the heli touch radio under every heli touch button (#331)', () => {
+    const radio = px(rule('.battle-hud.touch.heli .battle-radio'), 'bottom');
+    const lowest = Math.min(...['.tcm', '.tbtn.engine', '.tads-row', '.tbtn.laser', '.tbtn.fire'].map(s => px(rule(s), 'bottom')));
+    const pad = Number(rule('.battle-hud .battle-radio').match(/padding: (\d+)px/)![1]);
+    expect(radio + 2 * pad + LINE_PX + 4).toBeLessThanOrEqual(lowest);
+  });
 });

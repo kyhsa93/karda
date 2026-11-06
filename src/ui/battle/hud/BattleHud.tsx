@@ -248,7 +248,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
   return (
     <>
       <canvas ref={canvasRef} className="battle-canvas" />
-      <div className={touch ? 'battle-hud touch' : 'battle-hud'}>
+      <div className={touch ? (session.mode === 'play' && world.avatar.kind === 'heli' ? 'battle-hud touch heli' : 'battle-hud touch') : 'battle-hud'}>
         <div className="tickets">
           <div className="ticket-row">
             <b className="friend">{sideSymbol(side)} {Math.floor(own)}</b>
