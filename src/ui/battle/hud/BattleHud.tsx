@@ -17,6 +17,7 @@ import { clearOf, pointMarkBox, type Box, type PointMarkBoard } from '../coach';
 import { statusLines } from './soldierStatus';
 import { radioLine, type DeathReport } from '../deathReport';
 import { behind, BehindCall } from '../tickets';
+import { nextHitMark, type HitMark } from './hitMark';
 
 type Side = 'coalition' | 'veros';
 
@@ -36,7 +37,6 @@ export const TICKET_WARN = [100, 50, 20];
 export const MINIMAP = { desktop: 180, touch: 110 } as const;
 export const MINIMAP_RANGE = 1500;
 export const MINIMAP_RANGE_FOOT = 150;
-export const HIT_MARK = 0.3;
 export const HURT_MARK = 1.5;
 export const ALLY_RANGE = 3000;
 export const ALLY_INFANTRY_RANGE = 200;
@@ -61,7 +61,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
   const radio = useRef<{ text: string; until: number } | null>(null);
   const warned = useRef(new Set<number>());
   const [behindCall] = useState(() => new BehindCall(behind(runtime.conquest.points, side)));
-  const hitMark = useRef({ until: -1, kill: false });
+  const hitMark = useRef<HitMark>({ until: -1, kill: false });
   const hurt = useRef<{ x: number; z: number; until: number }[]>([]);
 
   useEffect(() => {
@@ -71,8 +71,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
 
   useEffect(() => world.events.onAny((e: SimEvent) => {
     const now = world.time;
-    if (e.t === 'memberHit' && e.byPlayer) hitMark.current = { until: now + HIT_MARK, kill: e.killed || hitMark.current.kill && hitMark.current.until > now };
-    if (e.t === 'unitDestroyed' && e.byPlayer) hitMark.current = { until: now + HIT_MARK, kill: true };
+    hitMark.current = nextHitMark(hitMark.current, e, now);
     if (e.t === 'playerHit' && world.avatar.kind === 'soldier') { const u = world.unit(e.by); if (u) hurt.current = [...hurt.current.filter(h => h.until > now), { x: u.pos.x, z: u.pos.z, until: now + HURT_MARK }].slice(-6); }
     if (e.t === 'unitDestroyed') {
       const victim = world.unit(e.id);

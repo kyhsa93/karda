@@ -528,7 +528,7 @@ export class World {
           }
         }
       }
-    }
+    } else if (byPlayer) this.emit({ t: 'unitHit', unit: u.id });
   }
 
   step(dt: number) {

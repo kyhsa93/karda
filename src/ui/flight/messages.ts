@@ -34,7 +34,7 @@ export function eventMessage(e: SimEvent): Omit<Message, 'life'> | null {
       return { text: t(`msg.fcr.${e.state}`, { n: e.count, mode: t(`msg.fcr.${e.mode}`) }), color: e.state === 'scan' ? '#ffd166' : '#4cc9f0' };
     case 'farp':
       return { text: t(`msg.farp.${e.state}`), color: e.state === 'cancelled' ? '#ef476f' : '#4cc9f0' };
-    case 'objective': case 'pointOwner': case 'battleEnd': case 'memberHit': case 'spotted': return null;
+    case 'objective': case 'pointOwner': case 'battleEnd': case 'memberHit': case 'unitHit': case 'spotted': return null;
     case 'crash': case 'unitDestroyed': case 'explosion': case 'fire': case 'impact': return null;
   }
 }
