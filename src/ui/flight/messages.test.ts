@@ -65,6 +65,10 @@ describe('battle end', () => {
     expect(eventMessage({ t: 'objective', id: 'battle', state: 'done' })).toBeNull();
     expect(eventMessage({ t: 'objective', id: 'battle', state: 'failed', reason: 'x' })).toBeNull();
   });
+
+  it('never turns a hit confirmation into a message (#273)', () => {
+    expect(eventMessage({ t: 'unitHit', unit: 3 })).toBeNull();
+  });
 });
 
 describe('flight messages after the flight ends', () => {

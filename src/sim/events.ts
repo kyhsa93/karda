@@ -10,6 +10,7 @@ export type SimEvent =
   | { t: 'crash'; reason: CrashReason; value?: number }
   | { t: 'zone'; inside: boolean; seconds: number }
   | { t: 'memberHit'; unit: number; killed: boolean; byPlayer: boolean }
+  | { t: 'unitHit'; unit: number }
   | { t: 'spotted'; id: number }
   | { t: 'pointOwner'; id: string; owner: 'coalition' | 'veros' | 'neutral'; from: 'coalition' | 'veros' | 'neutral' }
   | { t: 'battleEnd'; winner: 'coalition' | 'veros' | 'draw'; reason: 'tickets' | 'time' }
