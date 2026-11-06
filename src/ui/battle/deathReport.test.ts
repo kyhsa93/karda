@@ -12,8 +12,8 @@ import { deathLine, DeathReport, firedWeapon, radioLine } from './deathReport';
 const harek = JSON.parse(harekRaw) as BattleMapDef;
 const SOLDIER = { kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls: 'assault' } as const;
 
-function battle(side: 'coalition' | 'veros' = 'coalition') {
-  const { session, runtime } = createBattleSession(harek, 'quick', { side, seed: 7 });
+function battle(side: 'coalition' | 'veros' = 'coalition', mode: 'quick' | 'conquest' = 'quick') {
+  const { session, runtime } = createBattleSession(harek, mode, { side, seed: 7 });
   session.start();
   const report = new DeathReport(session);
   const world = session.world;
@@ -236,5 +236,98 @@ describe('death report over real lives (#227)', () => {
     g.world.emit({ t: 'missileEnd', id: 9002, hit: true });
     steps(g);
     expect(g.report.line()).toBe(t('crash.crewKilled'));
+  });
+});
+
+describe('missile kind behind the death tip (#298)', () => {
+  const launch = (g: Game, weapon: string) => {
+    const by = g.world.units.find(u => u.side === 'veros' && u.alive && u.def.weapons.some(w => w.id === weapon))
+      ?? g.world.units.find(u => u.side === 'veros' && u.defId === 'aaa_light')!;
+    const m = g.world.launchEnemyMissile(by, weapon);
+    g.world.enemyMissiles.splice(g.world.enemyMissiles.indexOf(m), 1);
+    steps(g);
+    return { by, m };
+  };
+  const missileKill = (g: Game, weapon: string) => {
+    const { by, m } = launch(g, weapon);
+    g.world.killPlayer('crewKilled');
+    g.world.emit({ t: 'missileEnd', id: m.id, hit: true });
+    steps(g);
+    return by;
+  };
+
+  it.each<[string, 'quick' | 'conquest', 'ir' | 'radar', string]>([
+    ['sa_ir', 'quick', 'ir', '적외선 미사일'],
+    ['sam_radar', 'conquest', 'radar', '레이더 미사일'],
+    ['heli_aam', 'quick', 'ir', '적외선 미사일'],
+    ['jet_aam', 'quick', 'ir', '적외선 미사일'],
+  ])('reads %s as the kind the death line names', (weapon, mode, kind, piece) => {
+    const g = battle('coalition', mode);
+    g.session.deploy(heli(g));
+    expect(g.report.missile()).toBe(null);
+    missileKill(g, weapon);
+    expect(g.session.mode).toBe('crashed');
+    expect(g.report.line()!.split(' · ')[1]).toBe(piece);
+    expect(g.report.missile()).toBe(kind);
+  });
+
+  it('names the real launchers of the battle map with their kind', () => {
+    const g = battle('coalition', 'conquest');
+    g.session.deploy(heli(g));
+    expect(missileKill(g, 'sam_radar').defId).toBe('sam_short');
+    expect(g.report.line()).toMatch(/^▲ VPA 단거리 지대공미사일 · 레이더 미사일 · /);
+    expect(g.report.missile()).toBe('radar');
+    const h = battle();
+    h.session.deploy(heli(h));
+    expect(missileKill(h, 'sa_ir').defId).toBe('manpads');
+    expect(h.report.line()).toMatch(/^▲ VPA 휴대용 대공미사일 조 · 적외선 미사일 · /);
+    expect(h.report.missile()).toBe('ir');
+  });
+
+  it('has no missile once a later cause takes the death line', () => {
+    const late = battle();
+    late.session.deploy(heli(late));
+    const { m } = launch(late, 'sa_ir');
+    late.world.emit({ t: 'missileEnd', id: m.id, hit: true });
+    steps(late);
+    late.world.emit({ t: 'crash', reason: 'terrain' });
+    steps(late);
+    expect(late.report.line()).toBe('기체가 지형에 충돌했습니다');
+    expect(late.report.missile()).toBe(null);
+
+    const gun = battle();
+    gun.session.deploy(heli(gun));
+    const aaa = gun.world.units.find(u => u.side === 'veros' && u.defId === 'aaa_light')!;
+    const shot = launch(gun, 'sam_radar');
+    gun.world.emit({ t: 'missileEnd', id: shot.m.id, hit: true });
+    steps(gun);
+    shoot(gun, aaa.id, 'zu23x2', 0.1);
+    gun.world.killPlayer('crewKilled');
+    steps(gun);
+    expect(gun.report.line()).toMatch(/ · 대공 기관포 · /);
+    expect(gun.report.missile()).toBe(null);
+  });
+
+  it('keeps the missile when the rotor it broke brings the helicopter down later', () => {
+    const g = battle();
+    g.session.deploy(heli(g));
+    const { m } = launch(g, 'sam_radar');
+    g.world.emit({ t: 'missileEnd', id: m.id, hit: true });
+    steps(g, 20);
+    g.world.killPlayer('rotorLoss');
+    steps(g);
+    expect(g.report.line()).toMatch(/ · 레이더 미사일 · /);
+    expect(g.report.missile()).toBe('radar');
+  });
+
+  it('has no missile for a rifle, a gun or no hit at all', () => {
+    const g = battle();
+    g.session.deploy(SOLDIER);
+    shoot(g, g.enemy.id, 'g_rifle', 1000);
+    expect(g.report.missile()).toBe(null);
+    respawn(g, heli(g));
+    g.world.killPlayer('crewKilled');
+    steps(g);
+    expect(g.report.missile()).toBe(null);
   });
 });

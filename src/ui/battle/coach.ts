@@ -1,6 +1,7 @@
 import { t } from '../../content/strings';
 import type { SortieRole } from '../../save/save';
 import type { CrashReason } from '../../sim/events';
+import type { ThreatKind } from '../../sim/weapons/enemyMissile';
 import { sideSymbol } from './hud/symbols';
 
 export const STEP_TIMEOUT = 20;
@@ -114,6 +115,7 @@ export const DEATH_TIPS: Record<CrashReason, string> = {
   killed: 'battle.tips.soldier', fall: 'battle.tips.fall',
 };
 const ON_FOOT = new Set<CrashReason>(['killed', 'fall']);
+const MISSILE_TIPS: Record<ThreatKind, string> = { ir: 'battle.tips.missile', radar: 'battle.tips.missileRadar' };
 
 export function inCapturablePoint(points: readonly { x: number; z: number; radius: number; owner: string }[], side: string, x: number, z: number) {
   return points.some(p => p.owner !== side && Math.hypot(x - p.x, z - p.z) <= p.radius);
@@ -133,9 +135,9 @@ export function coachText(line: string, side: 'coalition' | 'veros', target: str
   return t(`battle.coach.${key}`, { own: sideSymbol(side), enemy: sideSymbol(side === 'coalition' ? 'veros' : 'coalition'), target: target ?? '' });
 }
 
-export function deathTip(reason: CrashReason | undefined, missile: boolean) {
+export function deathTip(reason: CrashReason | undefined, missile: ThreatKind | null) {
   if (reason && ON_FOOT.has(reason)) return DEATH_TIPS[reason];
-  if (missile) return 'battle.tips.missile';
+  if (missile) return MISSILE_TIPS[missile];
   return reason ? DEATH_TIPS[reason] : 'battle.tips.fire';
 }
 
