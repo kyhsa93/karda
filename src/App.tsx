@@ -6,7 +6,7 @@ import { Loading } from './ui/screens/Loading';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { Title } from './ui/screens/Title';
 import { BattleLoadBoundary, useRaiseInRender } from './ui/battle/BattleLoadBoundary';
-import { BattleSetup, loadChoice, storeChoice, type BattleChoice } from './ui/battle/BattleSetup';
+import { BattleSetup, DEFAULT_CHOICE, loadChoice, storeChoice, type BattleChoice } from './ui/battle/BattleSetup';
 import { isBattleRoute, UiState } from './ui/state';
 import { hasSave, loadSave, storeSave, withDeviceDefaults, withFirstRun } from './save/save';
 
@@ -30,6 +30,7 @@ export function App() {
   useEffect(() => { storeSave(save); }, [save]);
   const [choice, setChoice] = useState<BattleChoice>(() => loadChoice());
   useEffect(() => { storeChoice(choice); }, [choice]);
+  const [quick, setQuick] = useState(false);
   const [returning, setReturning] = useState(() => isBattleRoute(window.location.hash));
   const settled = useCallback(() => setReturning(false), []);
   const touch = window.matchMedia('(pointer: coarse)').matches;
@@ -52,15 +53,15 @@ export function App() {
 
   switch (screen.name) {
     case 'title':
-      return <Title onBattle={() => ui.go({ name: 'battleSetup' })} onSettings={() => ui.go({ name: 'settings' })} onCredits={() => ui.go({ name: 'credits' })} />;
+      return <Title onQuick={() => { setQuick(true); ui.go({ name: 'battle', map: DEFAULT_CHOICE.map, mode: DEFAULT_CHOICE.mode }); }} onBattle={() => ui.go({ name: 'battleSetup' })} onSettings={() => ui.go({ name: 'settings' })} onCredits={() => ui.go({ name: 'credits' })} />;
     case 'settings':
       return <SettingsScreen settings={save.settings} onChange={settings => setSave(prev => ({ ...prev, settings }))} onCredits={() => ui.go({ name: 'credits' })} onBack={() => ui.go({ name: 'title' })} />;
     case 'credits':
       return <Credits onBack={() => ui.go({ name: 'title' })} />;
     case 'battleSetup':
       if (returning) return <BattleLoadBoundary><BattleCheck onReady={settled} /></BattleLoadBoundary>;
-      return <BattleSetup choice={choice} settings={save.settings} onChoice={setChoice} onDifficulty={difficulty => setSave(prev => ({ ...prev, settings: { ...prev.settings, difficulty } }))} onDeploy={() => ui.go({ name: 'battle', map: choice.map, mode: choice.mode })} onBack={() => ui.go({ name: 'title' })} />;
+      return <BattleSetup choice={choice} settings={save.settings} onChoice={setChoice} onDifficulty={difficulty => setSave(prev => ({ ...prev, settings: { ...prev.settings, difficulty } }))} onDeploy={() => { setQuick(false); ui.go({ name: 'battle', map: choice.map, mode: choice.mode }); }} onBack={() => ui.go({ name: 'title' })} />;
     case 'battle':
-      return <BattleLoadBoundary><Suspense fallback={<Loading progress={1} />}><Battle choice={choice} touch={touch} settings={save.settings} onSettings={settings => setSave(prev => ({ ...prev, settings }))} onSetup={() => ui.go({ name: 'battleSetup' })} onTitle={() => ui.go({ name: 'title' })} tips={save.tips} onTip={id => setSave(prev => prev.tips.includes(id) ? prev : { ...prev, tips: [...prev.tips, id] })} lastRole={save.lastRole} onRole={role => setSave(prev => prev.lastRole === role ? prev : { ...prev, lastRole: role })} /></Suspense></BattleLoadBoundary>;
+      return <BattleLoadBoundary><Suspense fallback={<Loading progress={1} />}><Battle choice={quick ? DEFAULT_CHOICE : choice} quick={quick} touch={touch} settings={save.settings} onSettings={settings => setSave(prev => ({ ...prev, settings }))} onSetup={() => ui.go({ name: 'battleSetup' })} onTitle={() => ui.go({ name: 'title' })} tips={save.tips} onTip={id => setSave(prev => prev.tips.includes(id) ? prev : { ...prev, tips: [...prev.tips, id] })} lastRole={save.lastRole} onRole={role => setSave(prev => prev.lastRole === role ? prev : { ...prev, lastRole: role })} /></Suspense></BattleLoadBoundary>;
   }
 }

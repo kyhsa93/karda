@@ -143,6 +143,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
     if (rendererRef.current) rendererRef.current.audio = audioRef.current;
     void audioRef.current?.resume();
   };
+  const unlockAudio = () => { if (audioRef.current?.suspended) void audioRef.current.resume(); };
 
   const begin = () => {
     ensureAudio();
@@ -258,6 +259,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      unlockAudio();
       if (PREVENT_DEFAULT.has(e.code)) e.preventDefault();
       input.keys.add(e.code);
       if (e.repeat) return;
@@ -335,7 +337,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const gear = gearButtons(sim);
 
   return (
-    <div className={`flight3d${touch ? ' touch' : ''}${session.respawns ? ' battle' : ''}${portrait && snap.mode === 'play' ? ' rotate' : ''}`}>
+    <div className={`flight3d${touch ? ' touch' : ''}${session.respawns ? ' battle' : ''}${portrait && snap.mode === 'play' ? ' rotate' : ''}`} onPointerDownCapture={unlockAudio} onPointerUpCapture={unlockAudio}>
       <div
         ref={mountRef}
         className="viewport"
