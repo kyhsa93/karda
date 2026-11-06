@@ -128,7 +128,7 @@ export function BattleOverlays({ game, side, quick = false, touch, tips, onTip, 
   useLayoutEffect(() => {
     if (!quickGo) return;
     const rally = runtime.spawnPoints(session.world).find(p => p.id === 'rally');
-    if (rally && session.deploy(runtime.spawnFor(rally, mod.KITS[kit], cls))) onRole('soldier');
+    if (rally) session.deploy(runtime.spawnFor(rally, mod.KITS[kit], cls));
   }, [session]);
   const c = runtime.conquest;
   const all = runtime.spawnPoints(session.world);

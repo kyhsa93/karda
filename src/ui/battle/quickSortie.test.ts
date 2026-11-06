@@ -5,6 +5,7 @@ import harekRaw from '../../content/battle/maps/harek.json?raw';
 import { t } from '../../content/strings';
 import type { SortieRole } from '../../save/save';
 import type { BattleMapDef } from '../../sim/battle/schema';
+import { STEP } from '../../sim/world';
 import { BattleOverlays } from './Battle';
 import { DEFAULT_CHOICE } from './BattleSetup';
 import { PointMarkBoard } from './coach';
@@ -51,6 +52,13 @@ function all(node: FakeNode, cls: string): FakeNode[] {
   return node.childNodes.flatMap(c => [...((c.attrs.class ?? '').split(' ').includes(cls) ? [c] : []), ...all(c, cls)]);
 }
 
+function press(node: FakeNode) {
+  const key = Object.keys(node).find(k => k.startsWith('__reactProps'))!;
+  (node as any)[key].onClick();
+}
+
+const buttons = (node: FakeNode): FakeNode[] => node.childNodes.flatMap(c => [...(c.nodeName === 'BUTTON' ? [c] : []), ...buttons(c)]);
+
 function fakeDom() {
   const doc: any = new FakeNode(9, '#document', null);
   doc.createElement = (type: string) => new FakeNode(1, type.toUpperCase(), doc);
@@ -95,15 +103,33 @@ describe('quick sortie (#239)', () => {
     return { session, onRole, picked };
   }
 
-  it('deploys a seen profile at the forward rally as an assault soldier, even when the last role was the helicopter', async () => {
+  it('deploys a seen profile at the forward rally as an assault soldier without recording it, even when the last role was the helicopter', async () => {
     const g = await mount({ quick: true, tips: ['card.soldier', 'card.apache'], lastRole: 'heli' });
     expect(g.session.mode).toBe('play');
     const body = g.session.world.playerBody();
     expect(body.kind).toBe('soldier');
     expect([body.pos.x, body.pos.z]).toEqual(RALLY);
     expect(g.session.world.soldier?.cls).toBe('assault');
-    expect(g.onRole).toHaveBeenCalledWith('soldier');
+    expect(g.onRole).not.toHaveBeenCalled();
     expect(container.textContent).not.toContain(t('battle.deploy.title'));
+  });
+
+  it('records the helicopter once it is picked on the deploy screen after a death in a quick sortie', async () => {
+    const g = await mount({ quick: true, tips: ['card.soldier', 'card.apache'], lastRole: 'heli' });
+    expect(g.session.mode).toBe('play');
+    const enemy = g.session.world.units.find(u => u.alive && u.side === 'veros')!;
+    g.session.world.emit({ t: 'playerHit', by: enemy.id, weapon: 'g_rifle', damage: 1000 });
+    while (g.session.mode !== 'deploy' || g.session.deployIn() > 0) g.session.step(STEP);
+    await vi.waitFor(() => expect(container.textContent).toContain(t('battle.deploy.title')));
+    expect(g.picked(0)).toBe(t('battle.roles.soldier'));
+    press(buttons(container).find(b => b.textContent === t('battle.roles.heli'))!);
+    await vi.waitFor(() => expect(g.picked(0)).toBe(t('battle.roles.heli')));
+    const go = () => buttons(container).find(b => b.attrs.class === 'go')!;
+    await vi.waitFor(() => expect(go().textContent).toBe(`${t('battle.deploy.go')} ▶`));
+    press(go());
+    expect(g.session.mode).toBe('play');
+    expect(g.session.world.playerBody().kind).toBe('heli');
+    expect(g.onRole.mock.calls).toEqual([['heli']]);
   });
 
   it('stops a first visit on the deploy screen with the soldier control card, soldier and rally picked', async () => {
