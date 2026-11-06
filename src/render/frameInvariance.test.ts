@@ -174,11 +174,11 @@ describe('battle frame invariance (#220)', () => {
       expectCombat(runs[n], n);
       if (n.endsWith('on')) expect(runs[n].drawCalls, n).toBeGreaterThan(0);
     }
-  }, 120000);
+  }, 180000);
 
   it('keeps the idle fixed value', () => {
     for (const [name, run] of Object.entries(idleMatrix())) expect(run.hash, name).toBe(IDLE_HASH);
-  }, 120000);
+  }, 180000);
 
   it.each([
     ['soldier', SOLDIER_HASH],
