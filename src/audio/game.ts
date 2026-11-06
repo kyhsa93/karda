@@ -103,6 +103,7 @@ export class GameAudio {
     }
     if (s.flying && s.aglFt !== undefined && s.vsFpm !== undefined && s.aglFt < ALTITUDE_FT && s.vsFpm < -ALTITUDE_SINK) this.voice.say('altitude');
   }
+  get suspended() { const s = this.rotor.context.state; return s !== 'running' && s !== 'closed'; }
   resume() { return this.rotor.resume(); }
   toggleMute() { return this.rotor.toggleMute(); }
   setVolume(v: number) { this.rotor.setVolume(v); }

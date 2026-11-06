@@ -71,6 +71,15 @@ describe('GameAudio', () => {
     expect(c.started.length).toBe(before + 1);
   });
 
+  it('counts a suspended or interrupted context as suspended, not a running or closed one (#239)', () => {
+    const c = fakeCtx() as Ctx & { state?: string };
+    const audio = new GameAudio(asCtx(c));
+    for (const [state, want] of [['suspended', true], ['interrupted', true], ['running', false], ['closed', false]] as const) {
+      c.state = state;
+      expect(audio.suspended).toBe(want);
+    }
+  });
+
   it('raises the loop pitch with rotor rpm', async () => {
     const c = fakeCtx();
     const audio = new GameAudio(asCtx(c));
