@@ -6,11 +6,11 @@ import harekRaw from '../../../content/battle/maps/harek.json?raw';
 import type { FlightRenderer } from '../../../render/renderer';
 import type { BattleMapDef } from '../../../sim/battle/schema';
 import { STEP } from '../../../sim/world';
-import { coachDimmed, MARK_STALE_MS, pointMarkBox, PointMarkBoard } from '../coach';
+import { coachDimmed, MARK_PANEL_GAP_PX, nearestOpenPoint, MARK_STALE_MS, pointMarkBox, PointMarkBoard, type Box } from '../coach';
 import { CoachBox } from '../CoachBox';
 import { DeathReport } from '../deathReport';
 import { loadBattle } from '../loadBattle';
-import { BattleHud } from './BattleHud';
+import { BattleHud, TOUCH_CONTROLS } from './BattleHud';
 
 vi.mock('../../../assets/loader', () => ({ assets: { loadGroup: async () => ({ loaded: [] }), get: () => null } }));
 
@@ -108,7 +108,7 @@ describe('capture mark in the HUD frame (#228)', () => {
   const COACH = { left: 290, right: 480, top: 116, bottom: 160 };
   const newNode = () => (document as unknown as { createElement: (t: string) => FakeNode }).createElement('div');
 
-  async function game({ withCamera = true, marks = new PointMarkBoard() } = {}) {
+  async function game({ withCamera = true, marks = new PointMarkBoard(), touch = true, away = false } = {}) {
     const mod = await loadBattle();
     const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 1 });
     session.start();
@@ -118,13 +118,13 @@ describe('capture mark in the HUD frame (#228)', () => {
     const camera = new THREE.PerspectiveCamera(70, W / H, 1, 5000);
     const y = world.terrain.surfaceAt(p.x, p.z) + 16;
     camera.position.set(p.x, y, p.z + 200);
-    camera.lookAt(p.x, y, p.z);
+    camera.lookAt(p.x, y, away ? p.z + 400 : p.z);
     const renderer = withCamera ? { camera, scene: { scene: { add() {} } }, overview: null } as unknown as FlightRenderer : null;
     root = createRoot(newNode() as unknown as HTMLElement);
-    root.render(createElement(BattleHud, { session, runtime, side: 'coalition', renderer, touch: true, death: new DeathReport(session), marks }));
+    root.render(createElement(BattleHud, { session, runtime, side: 'coalition', renderer, touch, death: new DeathReport(session), marks }));
     await vi.waitFor(() => expect(frame).toBeTypeOf('function'));
     await new Promise(done => setTimeout(done, 20));
-    return { session, runtime, world, p };
+    return { session, runtime, world, p, camera };
   }
 
   it('draws the ring and the in-circle text from the real capture of a point the player walked into', async () => {
@@ -243,5 +243,94 @@ describe('capture mark in the HUD frame (#228)', () => {
     marks.publish(on, performance.now() - MARK_STALE_MS - 1);
     await new Promise(done => setTimeout(done, 200));
     expect(node.attrs.class).toBe('coach');
+  });
+
+  describe('rear point mark on touch (#274)', () => {
+    const rear = (id: string) => drawn.texts.filter(x => POINT_MARK.test(x.text) && x.text.includes(` ${id} `));
+    const controlsAt = (boxes: Box[]) => {
+      const asked: string[] = [];
+      (document as unknown as { querySelectorAll: (s: string) => unknown[] }).querySelectorAll = (sel: string) => { asked.push(sel); return boxes.map(b => ({ getBoundingClientRect: () => b })); };
+      return asked;
+    };
+    const gapHit = (m: Box, b: Box) => Math.min(m.right, b.right + MARK_PANEL_GAP_PX) - Math.max(m.left, b.left - MARK_PANEL_GAP_PX) > 0 && Math.min(m.bottom, b.bottom + MARK_PANEL_GAP_PX) - Math.max(m.top, b.top - MARK_PANEL_GAP_PX) > 0;
+
+    it('draws the point behind the player on the bottom edge, mirrored, and publishes it', async () => {
+      const marks = new PointMarkBoard();
+      const { p } = await game({ marks, away: true });
+      frame();
+      const m = rear(p.id);
+      expect(m).toHaveLength(1);
+      expect(m[0].y).toBe(H - 48);
+      expect(m[0].x).toBeCloseTo(W / 2, 0);
+      expect(marks.boxes).toContainEqual(pointMarkBox(m[0].x, m[0].y, m[0].text.length * 7));
+    });
+
+    it('slides the rear mark clear of every touch control and the radio slot, and publishes where it went', async () => {
+      const marks = new PointMarkBoard();
+      const stick: Box = { left: 360, right: 470, top: 300, bottom: 380 };
+      const radio: Box = { left: 200, right: 360, top: 330, bottom: 384 };
+      const asked = controlsAt([stick, radio]);
+      const { p } = await game({ marks, away: true });
+      frame();
+      expect(asked.length).toBeGreaterThan(0);
+      expect(new Set(asked)).toEqual(new Set([TOUCH_CONTROLS]));
+      const m = rear(p.id)[0];
+      const box = pointMarkBox(m.x, m.y, m.text.length * 7);
+      for (const b of [stick, radio, { left: 290, right: 480, top: 116, bottom: 160 }]) expect(gapHit(box, b)).toBe(false);
+      expect(m.y).toBe(H - 48);
+      expect(m.x).toBe(stick.right + MARK_PANEL_GAP_PX + m.text.length * 7 / 2);
+      expect(marks.boxes).toContainEqual(box);
+    });
+
+    it('climbs a row when the whole bottom edge is taken', async () => {
+      const asked = controlsAt([{ left: 0, right: W, top: H - 60, bottom: H }]);
+      const marks = new PointMarkBoard();
+      const { p } = await game({ away: true, marks });
+      frame();
+      expect(asked.length).toBeGreaterThan(0);
+      const m = rear(p.id)[0];
+      expect(m.y + 8).toBeLessThanOrEqual(H - 60 - MARK_PANEL_GAP_PX);
+      expect(m.y).toBe(H - 48 - 2 * 18);
+      expect(coachDimmed({ left: m.x - 40, right: m.x + 40, top: m.y - 20, bottom: m.y + 20 }, marks, performance.now())).toBe(true);
+      expect(coachDimmed({ left: m.x - 40, right: m.x + 40, top: H - 48 - 20, bottom: H - 48 + 4 }, marks, performance.now())).toBe(false);
+    });
+
+    it('draws only the nearest open point behind the player on touch, every point on desktop', async () => {
+      const { runtime, camera, world } = await game({ away: true });
+      frame();
+      const behind = (id: string) => { const q = runtime.conquest.points.find(o => o.id === id)!; return new THREE.Vector3(q.x, world.terrain.surfaceAt(q.x, q.z) + 16, q.z).project(camera).z >= 1; };
+      const ids = () => drawn.texts.filter(x => POINT_MARK.test(x.text)).map(x => x.text.match(/ ([A-Z]) /)![1]);
+      const me = world.playerBody().pos;
+      const open = nearestOpenPoint(runtime.conquest.points, 'coalition', me.x, me.z);
+      const rearIds = runtime.conquest.points.map(q => q.id).filter(behind);
+      expect(rearIds.length).toBeGreaterThan(1);
+      expect(rearIds).toContain(open);
+      expect(ids().filter(behind)).toEqual([open]);
+      root.unmount();
+      await game({ away: true, touch: false });
+      frame();
+      expect(ids().filter(behind).sort()).toEqual([...rearIds].sort());
+    });
+
+    it('leaves the desktop rear mark where it was and never asks for touch controls', async () => {
+      const asked = controlsAt([{ left: 0, right: W, top: 0, bottom: H }]);
+      const { p } = await game({ away: true, touch: false });
+      frame();
+      expect(asked).toEqual([]);
+      const m = rear(p.id);
+      expect(m).toHaveLength(1);
+      expect(m[0].y).toBe(H - 48);
+      expect(m[0].x).toBeCloseTo(W / 2, 0);
+    });
+
+    it('keeps the front marks where they were on touch', async () => {
+      controlsAt([{ left: 0, right: W, top: 0, bottom: H }]);
+      const { p } = await game();
+      frame();
+      const m = rear(p.id);
+      expect(m).toHaveLength(1);
+      expect(m[0].x).toBeCloseTo(W / 2, 0);
+      expect(m[0].y).toBeCloseTo(H / 2, 0);
+    });
   });
 });
