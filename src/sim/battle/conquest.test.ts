@@ -6,6 +6,7 @@ import { makeWorld, ofSide, otherSide, SIDES } from '../testing';
 import { UNIT_DEFS } from '../units';
 import { STEP, type World } from '../world';
 import { Conquest, ticketClass } from './conquest';
+import { spent } from './conquestMatch.cases';
 import { conquestRules, validateRules } from './modes';
 import { createBattleSession } from './runtime';
 import type { BattleMapDef } from './schema';
@@ -169,11 +170,6 @@ describe('battle end through the session', () => {
   });
 });
 
-const spent = (c: Conquest, side: 'coalition' | 'veros') => {
-  const k = c.causes[side];
-  return k.bleed + k.person + k.vehicle + k.player;
-};
-
 describe('ticket causes (#237)', () => {
   it('tallies bleed, squad members, vehicles and the player apart per side', () => {
     const { world, c } = setup();
@@ -221,32 +217,4 @@ describe('ticket causes (#237)', () => {
     for (let i = 0; i < 120 * 3; i++) session.step(STEP);
     expect(runtime.conquest.causes.veros.player).toBe(runtime.rules.ticketCost.person + runtime.rules.ticketCost.attackHeli);
   });
-
-  it('accounts for every ticket a full match spends, ten seeds, the rest being the end clamp', () => {
-    for (let seed = 1; seed <= 10; seed++) {
-      const { session, runtime } = createBattleSession(harek, 'quick', { side: 'coalition', seed });
-      session.start();
-      session.frozen = false;
-      const c = runtime.conquest, start = runtime.rules.tickets;
-      const limit = (runtime.rules.timeLimitSec + 30) * 120;
-      let drift = 0;
-      for (let i = 0; session.mode !== 'done' && i < limit; i++) {
-        session.step(STEP);
-        if (!c.winner) for (const s of SIDES) drift = Math.max(drift, Math.abs(start - c.tickets[s] - spent(c, s)));
-      }
-      const name = `seed ${seed}`;
-      expect(c.winner, name).not.toBeNull();
-      expect(drift, name).toBeLessThan(1e-6);
-      for (const s of SIDES) {
-        const sum = spent(c, s), clamped = sum - (start - c.tickets[s]);
-        expect(clamped, `${name} ${s}`).toBeCloseTo(Math.max(0, sum - start), 6);
-        if (c.tickets[s] > 0) expect(clamped, `${name} ${s}`).toBeCloseTo(0, 6);
-      }
-      const loser = c.loser(c.winner!);
-      if (loser) {
-        expect(c.causes[loser].bleed, name).toBeGreaterThan(0);
-        expect(c.causes[loser].person, name).toBeGreaterThan(0);
-      }
-    }
-  }, 180000);
 });
