@@ -13,7 +13,7 @@ import { CaptureMarks, drawRing, markText, markTextY, RING_LABEL_GAP } from './c
 import { shadeTerrain } from './minimap';
 import { COLORS, pointColor, pointSymbol, sideSymbol } from './symbols';
 import { INFANTRY_WEAPONS } from '../../../sim/infantry/arms';
-import { clearOf, pointMarkBox, type Box, type PointMarkBoard } from '../coach';
+import { clearOf, clearOfAll, nearestOpenPoint, pointMarkBox, type Box, type PointMarkBoard } from '../coach';
 import { statusLines } from './soldierStatus';
 import { radioLine, type DeathReport } from '../deathReport';
 import { behind, BehindCall } from '../tickets';
@@ -51,6 +51,13 @@ function unitName(u: { defId: string; side: string }) {
 }
 
 export const OVERVIEW_BACK = 400;
+export const TOUCH_CONTROLS = '.sticks .tbtn, .sticks .stick, .sticks .stick span, .battle-hud .battle-radio';
+
+function touchControlBoxes(doc: Document | null | undefined, panel: Box | null): Box[] {
+  const found = doc?.querySelectorAll?.(TOUCH_CONTROLS) ?? [];
+  const boxes: Box[] = [...found].map(e => e.getBoundingClientRect()).filter(r => r.right > r.left && r.bottom > r.top);
+  return panel ? [...boxes, panel] : boxes;
+}
 
 export function BattleHud({ session, runtime, side, renderer, touch, death, marks: pointMarks }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean; death: DeathReport; marks: PointMarkBoard }) {
   const world = session.world;
@@ -146,11 +153,13 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
         };
         const boxes: Box[] = [];
         const panel = statusRef.current?.getBoundingClientRect() ?? null;
+        let controls: Box[] | null = null;
+        const rearOnTouch = touch ? nearestOpenPoint(runtime.conquest.points, side, me.x, me.z) : null;
         for (const p of runtime.conquest.points) {
           const s = project(p.x, world.terrain.surfaceAt(p.x, p.z) + 16, p.z);
           const edge = 48;
           let x = s.x, y = s.y;
-          if (!s.front && touch) continue;
+          if (!s.front && touch && p.id !== rearOnTouch) continue;
           if (!s.front) { x = w - x; y = h - edge; }
           x = Math.min(w - edge, Math.max(edge, x)); y = Math.min(h - edge, Math.max(edge, y));
           const minimapRight = (touch ? 0 : MINIMAP.desktop + 16) + 50;
@@ -160,6 +169,10 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
           const text = `${symbol}${mark ? RING_LABEL_GAP : ' '}${p.id} ${d >= 1000 ? `${(d / 1000).toFixed(1)}km` : `${Math.round(d)}m`}`;
           const width = g.measureText(text).width;
           x = clearOf(x, y, width, panel);
+          if (!s.front && touch) {
+            controls ??= touchControlBoxes(c.ownerDocument, panel);
+            ({ x, y } = clearOfAll(x, y, width, controls, w, edge));
+          }
           label(text, x, y, pointColor(p.owner, side));
           boxes.push(pointMarkBox(x, y, width));
           if (mark) drawRing(g, x + (g.measureText(symbol).width - width) / 2, y, mark, pointColor(mark.owner, side));

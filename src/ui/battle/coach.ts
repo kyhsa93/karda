@@ -86,6 +86,22 @@ export function clearOf(x: number, y: number, textWidth: number, panel: Box | nu
   return hit ? panel.left - textWidth / 2 - MARK_PANEL_GAP_PX : x;
 }
 
+export const MARK_ROW_PX = 18;
+
+export function clearOfAll(x: number, y: number, textWidth: number, blocks: readonly Box[], w: number, edge: number) {
+  const gap = MARK_PANEL_GAP_PX, half = textWidth / 2;
+  const free = (cx: number, cy: number) => {
+    const m = pointMarkBox(cx, cy, textWidth);
+    return blocks.every(b => !(Math.min(m.right, b.right + gap) - Math.max(m.left, b.left - gap) > 0 && Math.min(m.bottom, b.bottom + gap) - Math.max(m.top, b.top - gap) > 0));
+  };
+  const xs = [x, ...blocks.flatMap(b => [b.left - gap - half, b.right + gap + half])].filter(cx => cx >= edge && cx <= w - edge).sort((a, b) => Math.abs(a - x) - Math.abs(b - x));
+  for (let cy = y; cy >= edge; cy -= MARK_ROW_PX) {
+    const cx = xs.find(c => free(c, cy));
+    if (cx !== undefined) return { x: cx, y: cy };
+  }
+  return { x, y };
+}
+
 export class PointMarkBoard {
   boxes: readonly Box[] = [];
   at = -Infinity;
