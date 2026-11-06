@@ -331,3 +331,70 @@ describe('missile kind behind the death tip (#298)', () => {
     expect(g.report.missile()).toBe(null);
   });
 });
+
+describe('tickets the death cost, at the end of the death line (#238)', () => {
+  function paid(side: 'coalition' | 'veros' = 'coalition') {
+    const g = battle(side);
+    return { ...g, report: new DeathReport(g.session, () => g.runtime.conquest.causes[side].player) };
+  }
+
+  it('adds -1 to a soldier death, after the shooter, weapon and distance', () => {
+    const g = paid();
+    g.session.deploy(SOLDIER);
+    shoot(g, g.enemy.id, 'g_rifle', 1000);
+    expect(g.report.line()).toMatch(/^▲ VPA .+ · 소총 · [\d.]+k?m · 티켓 -1$/);
+  });
+
+  it('adds -1 to a soldier death with no shooter', () => {
+    const g = paid();
+    g.session.deploy(SOLDIER);
+    g.world.killPlayer('killed');
+    steps(g);
+    expect(g.report.line()).toBe('전사했습니다 · 티켓 -1');
+  });
+
+  it.each<[CrashReason, string]>([
+    ['rotorLoss', t('crash.rotorLoss')],
+    ['terrain', '기체가 지형에 충돌했습니다'],
+  ])('adds -6 to an attack helicopter %s, shot down or not', (reason, text) => {
+    const g = paid();
+    g.session.deploy(heli(g));
+    g.world.killPlayer(reason);
+    steps(g);
+    expect(g.report.line()).toBe(`${text} · 티켓 -6`);
+  });
+
+  it('counts each life on its own, for the VPA side too', () => {
+    const g = paid('veros');
+    g.session.deploy(SOLDIER);
+    g.world.killPlayer('killed');
+    steps(g);
+    expect(g.report.line()).toBe('전사했습니다 · 티켓 -1');
+    respawn(g, SOLDIER);
+    g.world.killPlayer('fall');
+    steps(g);
+    expect(g.report.line()).toBe('추락해 전사했습니다 · 티켓 -1');
+    expect(g.runtime.conquest.causes.veros.player).toBe(2);
+  });
+
+  it('reads how far the player total rose, not a fixed cost', () => {
+    const g = battle();
+    let total = 3;
+    const report = new DeathReport(g.session, () => total);
+    g.session.deploy(SOLDIER);
+    total = 7;
+    g.world.killPlayer('killed');
+    steps(g);
+    expect(report.line()).toBe('전사했습니다 · 티켓 -4');
+  });
+
+  it('leaves the line alone when the death cost nothing, once the match is over', () => {
+    const g = paid();
+    g.session.deploy(heli(g));
+    g.runtime.conquest.winner = 'veros';
+    g.world.killPlayer('terrain');
+    steps(g);
+    expect(g.runtime.conquest.causes.coalition.player).toBe(0);
+    expect(g.report.line()).toBe('기체가 지형에 충돌했습니다');
+  });
+});

@@ -5,6 +5,7 @@ import { t, tList } from '../../content/strings';
 import { cardDevice, Coach, coachText, controlCard, deadTip, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, PointMarkBoard, type CoachFacts } from './coach';
 import { CoachBox } from './CoachBox';
 import { DeathReport } from './deathReport';
+import { lostTickets, lostText } from './tickets';
 import type { Settings, SortieRole } from '../../save/save';
 import { DIFFICULTIES } from '../../sim/difficulty';
 import type { CrashReason } from '../../sim/events';
@@ -48,7 +49,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
       session.world.difficulty = DIFFICULTIES[settings.difficulty];
       session.world.conditions.time = choice.time;
       session.start();
-      setGame({ mod, session, runtime, death: new DeathReport(session), marks: new PointMarkBoard() });
+      setGame({ mod, session, runtime, death: new DeathReport(session, () => runtime.conquest.causes[choice.side].player), marks: new PointMarkBoard() });
     })().catch(error => { if (alive) raise(error); });
     return () => { alive = false; };
   }, [choice, round]);
@@ -72,7 +73,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
   const { session, runtime, mod, death, marks } = game;
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [, tick] = useState(0);
-  const tally = useRef({ kills: 0, deaths: 0, identified: 0, flips: 0, detected: 0, reason: undefined as CrashReason | undefined, walked: 0, shots: 0, lastShot: -Infinity, at: null as { x: number; z: number } | null });
+  const tally = useRef({ kills: 0, deaths: 0, identified: 0, flips: 0, detected: 0, reason: undefined as CrashReason | undefined, walked: 0, shots: 0, lastShot: -Infinity, at: null as { x: number; z: number } | null, lost: null as ReturnType<typeof lostTickets> | null });
   useEffect(() => session.world.events.onAny(e => {
     const T = tally.current;
     if (e.t === 'unitDestroyed' && e.byPlayer) T.kills++;
@@ -80,7 +81,8 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
     else if (e.t === 'identified') T.identified++;
     else if (e.t === 'pointOwner') T.flips++;
     else if (e.t === 'detected') T.detected++;
-  }), [session]);
+    else if (e.t === 'battleEnd') T.lost = lostTickets(runtime.conquest.causes[side]);
+  }), [session, runtime, side]);
   const tipsRef = useRef(tips);
   tipsRef.current = tips;
   const [coach] = useState(() => new Coach(new Set(tips), undefined, onTip));
@@ -177,12 +179,14 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
     const r = runtime.result;
     const outcome = r.winner > 0 ? 'win' : r.winner < 0 ? 'loss' : 'draw';
     const own = side === 'coalition' ? r.coalition : r.veros, enemy = side === 'coalition' ? r.veros : r.coalition;
+    const lost = tally.current.lost ??= lostTickets(runtime.conquest.causes[side]);
     return (
       <div className="overlay report">
         <div className="card">
           <h1>{t(`battle.report.${outcome}`)}</h1>
           <p className="sub">{r.byTime ? t('battle.report.time') : t(r.winner > 0 ? 'battle.report.ticketsWon' : 'battle.report.ticketsLost')}</p>
           <p className="sub">{t('battle.report.score', { own, enemy })} · {t('battle.report.length', { t: clock(r.seconds) })}</p>
+          <p className="sub">{lostText(lost)}</p>
           <p className="sub">{t('battle.report.kills', { n: tally.current.kills })} · {t('battle.report.deaths', { n: tally.current.deaths })}</p>
           <div className="pause-buttons">
             <button className="go" onClick={onAgain}>{t('battle.report.again')}</button>

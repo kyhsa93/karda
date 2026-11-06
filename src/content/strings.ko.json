@@ -485,11 +485,13 @@
       "setup": "전장 설정",
       "title": "타이틀",
       "ticketsWon": "적 티켓이 바닥났습니다",
-      "ticketsLost": "우리 티켓이 바닥났습니다"
+      "ticketsLost": "우리 티켓이 바닥났습니다",
+      "lost": "잃은 티켓: 거점 열세 {bleed} · 병력 {person} · 탈것 {vehicle} · 나 {player}"
     },
     "hud": {
       "you": "나",
       "tickets": "티켓 {n} 남음 — 거점을 되찾아야 한다",
+      "behind": "거점 열세 — 우리 티켓이 계속 줄어드는 중",
       "point": {
         "captured": "거점 {id} 점령",
         "lost": "거점 {id} 상실",
@@ -562,7 +564,8 @@
         "heli_rkt": "로켓",
         "missile_ir": "적외선 미사일",
         "missile_radar": "레이더 미사일"
-      }
+      },
+      "tickets": "티켓 -{n}"
     },
     "tips": {
       "fire": "적 대공에 맞았습니다 — 거점 위에서 오래 떠 있지 말고 능선 뒤에서 팝업하세요",
