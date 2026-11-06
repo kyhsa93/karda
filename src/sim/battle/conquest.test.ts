@@ -6,6 +6,7 @@ import { makeWorld, ofSide, otherSide, SIDES } from '../testing';
 import { UNIT_DEFS } from '../units';
 import { STEP, type World } from '../world';
 import { Conquest, ticketClass } from './conquest';
+import { spent } from './conquestMatch.cases';
 import { conquestRules, validateRules } from './modes';
 import { createBattleSession } from './runtime';
 import type { BattleMapDef } from './schema';
@@ -166,5 +167,54 @@ describe('battle end through the session', () => {
     for (let i = 0; i < 120 * 3; i++) session.step(STEP);
     expect(session.mode).toBe('done');
     expect(runtime.result).toMatchObject({ winner: 1, coalition: 0 });
+  });
+});
+
+describe('ticket causes (#237)', () => {
+  it('tallies bleed, squad members, vehicles and the player apart per side', () => {
+    const { world, c } = setup();
+    expect(c.causes).toEqual({
+      coalition: { bleed: 0, person: 0, vehicle: 0, player: 0 },
+      veros: { bleed: 0, person: 0, vehicle: 0, player: 0 },
+    });
+    const g = c.points.find(p => p.id === 'G')!;
+    g.owner = 'neutral'; g.v = 0;
+    tick(world, c, 60);
+    expect(c.causes.veros.bleed).toBeCloseTo(6, 9);
+    const squad = world.spawnUnit('inf', 3000, 3000);
+    const tank = world.spawnUnit('tank', 3100, 3000);
+    const truck = world.spawnUnit('c_truck', 3200, 3000);
+    tick(world, c, 1);
+    world.damageUnit(squad, 100, false);
+    world.damageUnit(tank, 1000, false);
+    world.damageUnit(truck, 1000, false);
+    tick(world, c, 1);
+    c.playerDied('coalition', 'attackHeli');
+    c.playerDied('veros', null);
+    expect(c.causes.veros).toMatchObject({ person: 5, vehicle: 4, player: 1 });
+    expect(c.causes.coalition).toEqual({ bleed: 0, person: 0, vehicle: 2, player: 6 });
+    for (const s of SIDES) expect(300 - c.tickets[s]).toBeCloseTo(spent(c, s), 9);
+  });
+
+  it('stops counting once the battle is over', () => {
+    const { world, c } = setup();
+    c.tickets.veros = 3;
+    c.playerDied('veros', 'attackHeli');
+    tick(world, c, 1);
+    expect(c.winner).toBe('coalition');
+    expect(c.causes.veros.player).toBe(6);
+    const after = structuredClone(c.causes);
+    c.playerDied('veros', 'attackHeli');
+    tick(world, c, 3);
+    expect(c.causes).toEqual(after);
+  });
+
+  it('carries the player\'s helicopter death through the session', () => {
+    const { session, runtime } = createBattleSession(harek, 'quick', { side: 'veros', seed: 3 });
+    session.start();
+    session.deploy(runtime.spawnFor(runtime.spawnPoints(session.world)[0], STANDARD_LOADOUT));
+    session.world.killPlayer('crewKilled');
+    for (let i = 0; i < 120 * 3; i++) session.step(STEP);
+    expect(runtime.conquest.causes.veros.player).toBe(runtime.rules.ticketCost.person + runtime.rules.ticketCost.attackHeli);
   });
 });

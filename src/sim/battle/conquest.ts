@@ -21,6 +21,10 @@ export interface ControlPoint {
 
 export type Winner = BattleSide | 'draw';
 
+export interface TicketCauses { bleed: number; person: number; vehicle: number; player: number }
+
+const noCauses = (): TicketCauses => ({ bleed: 0, person: 0, vehicle: 0, player: 0 });
+
 export function ticketClass(d: UnitDef): TicketClass | null {
   if (d.squad) return 'person';
   if (d.category === 'air') return d.carry ? 'transportHeli' : d.move && d.move.speed > 150 ? 'jet' : 'attackHeli';
@@ -36,6 +40,7 @@ const battleSide = (s: Side): s is BattleSide => s === 'coalition' || s === 'ver
 export class Conquest {
   readonly points: ControlPoint[];
   readonly tickets: Record<BattleSide, number>;
+  readonly causes: Record<BattleSide, TicketCauses> = { coalition: noCauses(), veros: noCauses() };
   elapsed = 0;
   winner: Winner | null = null;
   endReason: 'tickets' | 'time' | null = null;
@@ -107,7 +112,7 @@ export class Conquest {
     const c = this.owned('coalition'), v = this.owned('veros');
     if (c === v) return;
     const loser: BattleSide = c < v ? 'coalition' : 'veros';
-    this.tickets[loser] -= this.rules.bleedPerPointPerSec * Math.abs(c - v) * dt;
+    this.spend(loser, 'bleed', this.rules.bleedPerPointPerSec * Math.abs(c - v) * dt);
   }
 
   private losses(world: World) {
@@ -116,20 +121,25 @@ export class Conquest {
       if (!battleSide(u.side) || this.counted.has(u.id)) continue;
       if (u.def.squad) {
         const now = squadMembers(u), was = this.members.get(u.id) ?? u.def.squad;
-        if (now < was) this.tickets[u.side] -= (was - now) * cost.person;
+        if (now < was) this.spend(u.side, 'person', (was - now) * cost.person);
         this.members.set(u.id, now);
         if (!u.alive) { this.counted.add(u.id); this.members.delete(u.id); }
       } else if (!u.alive) {
         this.counted.add(u.id);
         const cls = ticketClass(u.def);
-        if (cls) this.tickets[u.side] -= cost[cls];
+        if (cls) this.spend(u.side, 'vehicle', cost[cls]);
       }
     }
   }
 
   playerDied(side: BattleSide, vehicle: TicketClass | null) {
     if (this.winner) return;
-    this.tickets[side] -= this.rules.ticketCost.person + (vehicle ? this.rules.ticketCost[vehicle] : 0);
+    this.spend(side, 'player', this.rules.ticketCost.person + (vehicle ? this.rules.ticketCost[vehicle] : 0));
+  }
+
+  private spend(side: BattleSide, cause: keyof TicketCauses, n: number) {
+    this.tickets[side] -= n;
+    this.causes[side][cause] += n;
   }
 
   private checkEnd(world: World) {
