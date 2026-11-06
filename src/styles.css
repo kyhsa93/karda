@@ -104,6 +104,9 @@ button.mode span { font-size: 13px; color: #aebbd0; }
 button.mode.primary { background: rgba(255, 209, 102, .14); border-color: #ffd166; }
 button.mode.primary b { color: #ffd166; }
 button.mode:disabled { opacity: .45; cursor: default; }
+.title-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 10px; }
+.title-modes button.mode { margin: 0; }
+.title-modes button.mode span { word-break: keep-all; }
 .result { display: grid; grid-template-columns: auto auto; gap: 6px 18px; justify-content: center; margin: 8px 0 20px; font-size: 16px; }
 .result b { color: #ffd166; }
 .loading .bar { width: 240px; height: 6px; margin: 0 auto; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }

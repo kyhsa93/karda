@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { assets } from '../../assets/loader';
 import { HELI_GROUP } from '../../assets/manifest';
 import { t, tList } from '../../content/strings';
@@ -31,8 +31,8 @@ export function clock(sec: number) {
 
 const nextPaint = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())));
 
-export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, tips, onTip, lastRole, onRole }: {
-  choice: BattleChoice; touch: boolean; settings: Settings; onSettings: (s: Settings) => void; onSetup: () => void; onTitle: () => void; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void;
+export function Battle({ choice, quick = false, touch, settings, onSettings, onSetup, onTitle, tips, onTip, lastRole, onRole }: {
+  choice: BattleChoice; quick?: boolean; touch: boolean; settings: Settings; onSettings: (s: Settings) => void; onSetup: () => void; onTitle: () => void; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void;
 }) {
   const [game, setGame] = useState<{ mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport; marks: PointMarkBoard } | null>(null);
   const [round, setRound] = useState(0);
@@ -58,7 +58,7 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
     <BattleLoadBoundary strings="battle.matchError">
       <Flight key={round} session={game.session} touch={touch} settings={settings} onSettings={onSettings} onExit={onSetup} onRenderer={setRenderer}>
         <BattleHud session={game.session} runtime={game.runtime} side={choice.side} renderer={renderer} touch={touch} death={game.death} marks={game.marks} />
-        <BattleOverlays game={game} side={choice.side} touch={touch} tips={tips} onTip={onTip} lastRole={lastRole} onRole={onRole} onAgain={() => { setGame(null); setRound(r => r + 1); }} onSetup={onSetup} onTitle={onTitle} />
+        <BattleOverlays game={game} side={choice.side} quick={quick} touch={touch} tips={tips} onTip={onTip} lastRole={lastRole} onRole={onRole} onAgain={() => { setGame(null); setRound(r => r + 1); }} onSetup={onSetup} onTitle={onTitle} />
       </Flight>
     </BattleLoadBoundary>
   );
@@ -69,7 +69,7 @@ function squadLabel(label: string) {
   return n ? t('battle.deploy.spawnSquadN', { id, n }) : t('battle.deploy.spawnSquad', { id });
 }
 
-export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRole, onAgain, onSetup, onTitle }: { game: { mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport; marks: PointMarkBoard }; side: 'coalition' | 'veros'; touch: boolean; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void; onAgain: () => void; onSetup: () => void; onTitle: () => void }) {
+export function BattleOverlays({ game, side, quick = false, touch, tips, onTip, lastRole, onRole, onAgain, onSetup, onTitle }: { game: { mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport; marks: PointMarkBoard }; side: 'coalition' | 'veros'; quick?: boolean; touch: boolean; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void; onAgain: () => void; onSetup: () => void; onTitle: () => void }) {
   const { session, runtime, mod, death, marks } = game;
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [, tick] = useState(0);
@@ -115,7 +115,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
   const firstSortie = !tips.includes('card.apache');
   const firstFoot = !tips.includes('card.soldier');
   const heliReady = side === 'coalition';
-  const [role, setRole] = useState<SortieRole>(() => initialRole(side, lastRole));
+  const [role, setRole] = useState<SortieRole>(() => quick ? 'soldier' : initialRole(side, lastRole));
   const heliSpawn = firstSortie ? 'baseAir' : 'base';
   useEffect(() => { if (role === 'heli') void assets.loadGroup(HELI_GROUP); }, [role]);
   const home = runtime.conquest.points.find(p => p.owner === side);
@@ -124,6 +124,12 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
   const [spawnId, setSpawnId] = useState(role === 'heli' ? heliSpawn : soldierSpawn);
   const [kit, setKit] = useState<KitId>('closeSupport');
   const [cls, setCls] = useState<ClassId>('assault');
+  const quickGo = quick && !controlCard('soldier', tips);
+  useLayoutEffect(() => {
+    if (!quickGo) return;
+    const rally = runtime.spawnPoints(session.world).find(p => p.id === 'rally');
+    if (rally && session.deploy(runtime.spawnFor(rally, mod.KITS[kit], cls))) onRole('soldier');
+  }, [session]);
   const c = runtime.conquest;
   const all = runtime.spawnPoints(session.world);
   const points = all.filter(p => p.role === role);
