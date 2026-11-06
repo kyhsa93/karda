@@ -17,7 +17,7 @@ import { clearOf, pointMarkBox, type Box, type PointMarkBoard } from '../coach';
 import { statusLines } from './soldierStatus';
 import { radioLine, type DeathReport } from '../deathReport';
 import { behind, BehindCall } from '../tickets';
-import { nextHitMark, type HitMark } from './hitMark';
+import { hitMarkColor, nextHitMark, NO_HIT_MARK, type HitMark } from './hitMark';
 
 type Side = 'coalition' | 'veros';
 
@@ -61,7 +61,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
   const radio = useRef<{ text: string; until: number } | null>(null);
   const warned = useRef(new Set<number>());
   const [behindCall] = useState(() => new BehindCall(behind(runtime.conquest.points, side)));
-  const hitMark = useRef<HitMark>({ until: -1, kill: false });
+  const hitMark = useRef<HitMark>(NO_HIT_MARK);
   const hurt = useRef<{ x: number; z: number; until: number }[]>([]);
 
   useEffect(() => {
@@ -212,8 +212,9 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
         const gap = Math.max(3, (Math.tan(spread) / Math.tan(((cam as THREE.PerspectiveCamera).fov * Math.PI) / 360)) * (h / 2));
         g.strokeStyle = 'rgba(232,238,247,.9)'; g.lineWidth = 2;
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { g.beginPath(); g.moveTo(cx0 + dx * gap, cy0 + dy * gap); g.lineTo(cx0 + dx * (gap + 9), cy0 + dy * (gap + 9)); g.stroke(); }
-        if (hitMark.current.until > world.time) {
-          g.strokeStyle = hitMark.current.kill ? '#ff4d4d' : '#ffffff'; g.lineWidth = hitMark.current.kill ? 4 : 2;
+        const mark = hitMarkColor(hitMark.current, world.time);
+        if (mark) {
+          g.strokeStyle = mark === 'kill' ? '#ff4d4d' : '#ffffff'; g.lineWidth = mark === 'kill' ? 4 : 2;
           for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { g.beginPath(); g.moveTo(cx0 + dx * 6, cy0 + dy * 6); g.lineTo(cx0 + dx * 14, cy0 + dy * 14); g.stroke(); }
         }
         for (const hh of hurt.current) {
