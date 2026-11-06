@@ -518,3 +518,21 @@ describe('coach over a point mark (#295)', () => {
     expect(css).toMatch(/\.coach\.dimmed \{ opacity: \.5; \}/);
   });
 });
+
+describe('desktop radio line', () => {
+  const css = readFileSync(join(__dirname, '..', '..', 'styles.css'), 'utf8');
+  const rule = (selector: string) => css.match(new RegExp(`(^|\\n)${selector.replace(/[.()]/g, '\\$&')} \\{[^}]*\\}`))![0];
+  const px = (block: string, prop: string) => Number(block.match(new RegExp(`(^|[ ;{])${prop}: (?:calc\\()?(\\d+)px`))![2]);
+  const LINE_PX = 18;
+
+  it('sits above a two-line coach so both stay readable together', () => {
+    const coach = rule('.coach'), radio = rule('.battle-hud .battle-radio');
+    const pad = Number(coach.match(/padding: (\d+)px/)![1]);
+    const twoLineTop = px(coach, 'bottom') + 2 * LINE_PX + 2 * pad + 2;
+    expect(px(radio, 'bottom')).toBeGreaterThanOrEqual(twoLineTop + 4);
+  });
+
+  it('keeps the touch radio where the touch layout put it', () => {
+    expect(px(rule('.battle-hud.touch .battle-radio'), 'bottom')).toBe(150);
+  });
+});
