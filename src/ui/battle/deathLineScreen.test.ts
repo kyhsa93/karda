@@ -514,3 +514,43 @@ describe('why the tickets fell, on screen (#238)', () => {
     expect(line()).toBe(text);
   }, 30000);
 });
+
+describe('heli touch radio slot (#331)', () => {
+  let root: Root;
+  let container: FakeNode;
+
+  beforeEach(() => { container = fakeDom(); });
+  afterEach(async () => {
+    root.unmount();
+    await new Promise(done => setTimeout(done, 20));
+    vi.unstubAllGlobals();
+  });
+
+  async function hud(touch: boolean, heli: boolean) {
+    const mod = await loadBattle();
+    const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 7 });
+    session.start();
+    root = createRoot(container as unknown as HTMLElement);
+    root.render(createElement(BattleHud, { session, runtime, side: 'coalition', renderer: null, touch, death: new DeathReport(session), marks: new PointMarkBoard() }));
+    await vi.waitFor(() => expect(all(container, 'battle-canvas').length).toBe(1));
+    const pad = session.world.pads[0];
+    session.deploy(heli ? { kind: 'heli', at: 'air', x: pad.x, z: pad.z, agl: 150, headingDeg: 0, kit: STANDARD_LOADOUT, speed: 0 } : SOLDIER);
+    const cls = () => all(container, 'battle-hud')[0]?.attrs.class;
+    await vi.waitFor(() => expect(cls()).toBeDefined());
+    return { session, cls };
+  }
+
+  it('marks the touch hud only while flying the heli in play', async () => {
+    const g = await hud(true, true);
+    expect(g.cls()).toBe('battle-hud touch heli');
+    g.session.world.killPlayer('rotorLoss');
+    for (let i = 0; i < 2; i++) g.session.step(STEP);
+    expect(g.session.mode).toBe('crashed');
+    await vi.waitFor(() => expect(g.cls()).toBe('battle-hud touch'));
+  });
+
+  it.each([[true, false, 'battle-hud touch'], [false, true, 'battle-hud'], [false, false, 'battle-hud']])('touch %s heli %s keeps %s', async (touch, heli, want) => {
+    const g = await hud(touch, heli);
+    expect(g.cls()).toBe(want);
+  });
+});

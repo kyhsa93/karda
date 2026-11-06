@@ -221,6 +221,7 @@ button.mode:disabled { opacity: .45; cursor: default; }
 .battle-hud .killfeed div.mine { color: #ffd166; font-weight: 700; }
 .battle-hud .battle-radio { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(170px + env(safe-area-inset-bottom)); background: rgba(6, 12, 22, .72); padding: 6px 12px; border-radius: 8px; font-size: 15px; }
 .battle-hud.touch .battle-radio { bottom: calc(150px + env(safe-area-inset-bottom)); }
+.battle-hud.touch.heli .battle-radio { bottom: calc(6px + env(safe-area-inset-bottom)); }
 .flight3d.touch .farp-menu { right: auto; left: 50%; transform: translateX(-50%); top: calc(76px + env(safe-area-inset-top)); max-width: min(360px, calc(100vw - 360px)); padding: 6px 8px; }
 .flight3d.touch .hint { top: auto; bottom: calc(110px + env(safe-area-inset-bottom)); }
 .flight3d.battle:not(.touch) .farp-menu { top: calc(130px + env(safe-area-inset-top)); }
