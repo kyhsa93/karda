@@ -1,5 +1,6 @@
 import { t } from '../../content/strings';
 import type { SortieRole } from '../../save/save';
+import type { CrashReason } from '../../sim/events';
 import { sideSymbol } from './hud/symbols';
 
 export const STEP_TIMEOUT = 20;
@@ -106,11 +107,13 @@ export function coachDimmed(coach: Box | null | undefined, marks: PointMarkBoard
     && Math.min(m.bottom, coach.bottom) - Math.max(m.top, coach.top) >= MARK_OVERLAP_MIN_PX);
 }
 
-export const DEATH_TIPS: Record<string, string> = {
+export const DEATH_TIPS: Record<CrashReason, string> = {
   crewKilled: 'battle.tips.fire', rotorLoss: 'battle.tips.fire', terrain: 'battle.tips.terrain', tree: 'battle.tips.terrain', building: 'battle.tips.terrain',
   rotorStrike: 'battle.tips.terrain', water: 'battle.tips.terrain', outOfBounds: 'battle.tips.zone', hardLanding: 'battle.tips.landing',
   slideLanding: 'battle.tips.landing', tiltLanding: 'battle.tips.landing', slope: 'battle.tips.landing', ditched: 'battle.tips.terrain',
+  killed: 'battle.tips.soldier', fall: 'battle.tips.fall',
 };
+const ON_FOOT = new Set<CrashReason>(['killed', 'fall']);
 
 export function inCapturablePoint(points: readonly { x: number; z: number; radius: number; owner: string }[], side: string, x: number, z: number) {
   return points.some(p => p.owner !== side && Math.hypot(x - p.x, z - p.z) <= p.radius);
@@ -130,10 +133,10 @@ export function coachText(line: string, side: 'coalition' | 'veros', target: str
   return t(`battle.coach.${key}`, { own: sideSymbol(side), enemy: sideSymbol(side === 'coalition' ? 'veros' : 'coalition'), target: target ?? '' });
 }
 
-export function deathTip(reason: string | undefined, missile: boolean) {
-  if (reason === 'killed') return 'battle.tips.soldier';
+export function deathTip(reason: CrashReason | undefined, missile: boolean) {
+  if (reason && ON_FOOT.has(reason)) return DEATH_TIPS[reason];
   if (missile) return 'battle.tips.missile';
-  return (reason && DEATH_TIPS[reason]) || 'battle.tips.fire';
+  return reason ? DEATH_TIPS[reason] : 'battle.tips.fire';
 }
 
 export function controlCard(role: SortieRole, tips: readonly string[]) {

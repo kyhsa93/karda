@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, controlCard, deadTip, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
+import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, controlCard, DEATH_TIPS, deadTip, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
 import { SOLDIER_COMMANDS } from '../../input/roles';
 import type { Command } from '../../input/bindings';
@@ -148,7 +148,7 @@ describe('battle coach (wiki 8.10)', () => {
 
   it('has a string for every step and tip', () => {
     for (const s of COACH_STEPS) expect(hasString(`battle.coach.${s.id}`), s.id).toBe(true);
-    for (const r of ['crewKilled', 'terrain', 'outOfBounds', 'hardLanding', undefined]) expect(hasString(deathTip(r, false))).toBe(true);
+    for (const r of ['crewKilled', 'terrain', 'outOfBounds', 'hardLanding', undefined] as const) expect(hasString(deathTip(r, false))).toBe(true);
     expect(hasString(deathTip('crewKilled', true))).toBe(true);
   });
 
@@ -158,6 +158,29 @@ describe('battle coach (wiki 8.10)', () => {
     const line = t(deathTip('killed', false));
     expect(line).not.toBe('battle.tips.soldier');
     expect(line).not.toMatch(/대공|팝업/);
+  });
+
+  it('gives a soldier who dies from a fall a fall tip, not an air-defense one (#296)', () => {
+    expect(deathTip('fall', false)).toBe('battle.tips.fall');
+    expect(deathTip('fall', true)).toBe('battle.tips.fall');
+    expect(t('battle.tips.fall')).toBe('가파른 내리막은 돌아서 내려가세요 — 체력이 적으면 낮은 곳도 치명적입니다');
+    expect(t(deathTip('fall', false))).not.toMatch(/대공|팝업|미사일|플레어|추락/);
+  });
+
+  it('names a tip for every crash reason and keeps the others as they were (#296)', () => {
+    const reasons = Object.keys(strings.crash).filter(k => k !== 'title' && k !== 'retry') as CrashReason[];
+    expect(Object.keys(DEATH_TIPS).sort()).toEqual([...reasons].sort());
+    for (const r of reasons) expect(hasString(DEATH_TIPS[r]), r).toBe(true);
+    expect(DEATH_TIPS).toEqual({
+      crewKilled: 'battle.tips.fire', rotorLoss: 'battle.tips.fire', terrain: 'battle.tips.terrain', tree: 'battle.tips.terrain', building: 'battle.tips.terrain',
+      rotorStrike: 'battle.tips.terrain', water: 'battle.tips.terrain', outOfBounds: 'battle.tips.zone', hardLanding: 'battle.tips.landing',
+      slideLanding: 'battle.tips.landing', tiltLanding: 'battle.tips.landing', slope: 'battle.tips.landing', ditched: 'battle.tips.terrain',
+      killed: 'battle.tips.soldier', fall: 'battle.tips.fall',
+    });
+    for (const r of reasons) expect(deathTip(r, false), r).toBe(DEATH_TIPS[r]);
+    for (const r of reasons) expect(deathTip(r, true), r).toBe(r === 'killed' || r === 'fall' ? DEATH_TIPS[r] : 'battle.tips.missile');
+    expect(deathTip(undefined, false)).toBe('battle.tips.fire');
+    expect(deathTip(undefined, true)).toBe('battle.tips.missile');
   });
 
   it('never opens a death tip with the death line it sits under (#313)', () => {
