@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import harekRaw from '../../content/battle/maps/harek.json?raw';
 import { t } from '../../content/strings';
 import type { BattleMapDef } from '../../sim/battle/schema';
+import { STANDARD_LOADOUT } from '../../sim/heli/loadout';
+import type { FlightSession } from '../../sim/session';
 import { STEP } from '../../sim/world';
 import { BattleOverlays } from './Battle';
 import { coachText, PointMarkBoard } from './coach';
@@ -215,6 +217,95 @@ describe('death line on screen (#227)', () => {
     expect(g.deadTip()).toBe(false);
     await g.go();
     expect(g.onTip).not.toHaveBeenCalledWith('rules.dead');
+  });
+});
+
+describe('death tip on the deploy screen (#298)', () => {
+  let root: Root;
+  let container: FakeNode;
+
+  beforeEach(() => { container = fakeDom(); });
+  afterEach(async () => {
+    root.unmount();
+    await new Promise(done => setTimeout(done, 20));
+    vi.unstubAllGlobals();
+  });
+
+  async function die(mode: 'quick' | 'conquest', kill: (world: FlightSession['world']) => void, heli = true) {
+    const mod = await loadBattle();
+    const { session, runtime } = mod.createBattleSession(harek, mode, { side: 'coalition', seed: 7 });
+    session.start();
+    const death = new DeathReport(session);
+    root = createRoot(container as unknown as HTMLElement);
+    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: 'coalition', touch: false, tips: ['card.soldier', 'card.apache', 'rules.dead'], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }));
+    await vi.waitFor(() => expect(container.textContent).toContain(t('battle.deploy.title')));
+    const pad = session.world.pads[0];
+    session.deploy(heli ? { kind: 'heli', at: 'air', x: pad.x, z: pad.z, agl: 150, headingDeg: 0, kit: STANDARD_LOADOUT, speed: 0 } : SOLDIER);
+    await vi.waitFor(() => expect(container.textContent).not.toContain(t('battle.deploy.title')));
+    kill(session.world);
+    for (let i = 0; i < 2; i++) session.step(STEP);
+    expect(session.mode).toBe('crashed');
+    while (session.mode !== 'deploy') session.step(STEP);
+    await vi.waitFor(() => expect(all(container, 'tip')).toHaveLength(2));
+    const [line, tip] = all(container, 'tip').map(n => n.textContent);
+    return { line, tip };
+  }
+
+  const launch = (world: FlightSession['world'], weapon: string) => {
+    const by = world.units.find(u => u.side === 'veros' && u.alive && u.def.weapons.some(w => w.id === weapon))
+      ?? world.units.find(u => u.side === 'veros' && u.defId === 'aaa_light')!;
+    const m = world.launchEnemyMissile(by, weapon);
+    world.enemyMissiles.splice(world.enemyMissiles.indexOf(m), 1);
+    return m;
+  };
+  const missile = (weapon: string) => (world: FlightSession['world']) => {
+    const m = launch(world, weapon);
+    world.killPlayer('crewKilled');
+    world.emit({ t: 'missileEnd', id: m.id, hit: true });
+  };
+
+  it.each<[string, 'quick' | 'conquest']>([['sa_ir', 'quick'], ['heli_aam', 'quick'], ['jet_aam', 'quick']])('tells a %s death to flare, not chaff', async (weapon, mode) => {
+    const { line, tip } = await die(mode, missile(weapon));
+    expect(line.split(' · ')[1]).toBe('적외선 미사일');
+    expect(tip).toBe(t('battle.tips.missile'));
+    expect(tip).toContain('플레어');
+    expect(tip).not.toContain('채프');
+  });
+
+  it('tells a radar SAM death to chaff, not flare', async () => {
+    const { line, tip } = await die('conquest', missile('sam_radar'));
+    expect(line).toMatch(/^▲ VPA 단거리 지대공미사일 · 레이더 미사일 · /);
+    expect(tip).toBe(t('battle.tips.missileRadar'));
+    expect(tip).toContain('채프');
+    expect(tip).not.toContain('플레어');
+  });
+
+  it('gives no missile tip for a gun, a rifle or the ground, even after a missile hit', async () => {
+    const gun = await die('quick', world => {
+      const aaa = world.units.find(u => u.side === 'veros' && u.defId === 'aaa_light')!;
+      world.emit({ t: 'missileEnd', id: launch(world, 'sa_ir').id, hit: true });
+      world.emit({ t: 'playerHit', by: aaa.id, weapon: 'zu23x2', damage: 0.1 });
+      world.killPlayer('crewKilled');
+    });
+    expect(gun.line).toMatch(/ · 대공 기관포 · /);
+    expect(gun.tip).toBe(t('battle.tips.fire'));
+    root.unmount();
+    container = fakeDom();
+    const ground = await die('quick', world => {
+      world.emit({ t: 'missileEnd', id: launch(world, 'sam_radar').id, hit: true });
+      world.emit({ t: 'crash', reason: 'terrain' });
+    });
+    expect(ground.line).toBe('기체가 지형에 충돌했습니다');
+    expect(ground.tip).toBe(t('battle.tips.terrain'));
+    root.unmount();
+    container = fakeDom();
+    const rifle = await die('quick', world => {
+      const inf = world.units.find(u => u.side === 'veros' && u.def.weapons.some(w => w.id === 'g_rifle'))!;
+      world.emit({ t: 'playerHit', by: inf.id, weapon: 'g_rifle', damage: 1000 });
+    }, false);
+    expect(rifle.line).toMatch(/ · 소총 · /);
+    expect(rifle.tip).toBe(t('battle.tips.soldier'));
+    for (const tip of [gun.tip, ground.tip, rifle.tip]) expect(tip).not.toMatch(/미사일|플레어|채프/);
   });
 });
 

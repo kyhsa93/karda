@@ -10,6 +10,9 @@ import strings from '../../content/strings.ko.json';
 import type { CrashReason } from '../../sim/events';
 import { deathLine, type DeathHit } from './deathReport';
 
+const KINDS = ['ir', 'radar'] as const;
+const MISSILE_TIP = { ir: 'battle.tips.missile', radar: 'battle.tips.missileRadar' } as const;
+
 const base: CoachFacts = { agl: 60, tads: false, identified: 0, flips: 0, detected: 0, deaths: 0, playing: true, foot: false, walked: 0, shots: 0, inPoint: false };
 const foot: CoachFacts = { ...base, foot: true };
 
@@ -148,23 +151,23 @@ describe('battle coach (wiki 8.10)', () => {
 
   it('has a string for every step and tip', () => {
     for (const s of COACH_STEPS) expect(hasString(`battle.coach.${s.id}`), s.id).toBe(true);
-    for (const r of ['crewKilled', 'terrain', 'outOfBounds', 'hardLanding', undefined] as const) expect(hasString(deathTip(r, false))).toBe(true);
-    expect(hasString(deathTip('crewKilled', true))).toBe(true);
+    for (const r of ['crewKilled', 'terrain', 'outOfBounds', 'hardLanding', undefined] as const) expect(hasString(deathTip(r, null))).toBe(true);
+    for (const k of KINDS) expect(hasString(deathTip('crewKilled', k)), k).toBe(true);
   });
 
   it('gives a soldier killed by enemy fire an infantry tip, even right after a missile hit', () => {
-    expect(deathTip('killed', false)).toBe('battle.tips.soldier');
-    expect(deathTip('killed', true)).toBe('battle.tips.soldier');
-    const line = t(deathTip('killed', false));
+    expect(deathTip('killed', null)).toBe('battle.tips.soldier');
+    for (const k of KINDS) expect(deathTip('killed', k), k).toBe('battle.tips.soldier');
+    const line = t(deathTip('killed', null));
     expect(line).not.toBe('battle.tips.soldier');
     expect(line).not.toMatch(/대공|팝업/);
   });
 
   it('gives a soldier who dies from a fall a fall tip, not an air-defense one (#296)', () => {
-    expect(deathTip('fall', false)).toBe('battle.tips.fall');
-    expect(deathTip('fall', true)).toBe('battle.tips.fall');
+    expect(deathTip('fall', null)).toBe('battle.tips.fall');
+    for (const k of KINDS) expect(deathTip('fall', k), k).toBe('battle.tips.fall');
     expect(t('battle.tips.fall')).toBe('가파른 내리막은 돌아서 내려가세요 — 체력이 적으면 낮은 곳도 치명적입니다');
-    expect(t(deathTip('fall', false))).not.toMatch(/대공|팝업|미사일|플레어|추락/);
+    expect(t(deathTip('fall', null))).not.toMatch(/대공|팝업|미사일|플레어|추락/);
   });
 
   it('names a tip for every crash reason and keeps the others as they were (#296)', () => {
@@ -177,13 +180,13 @@ describe('battle coach (wiki 8.10)', () => {
       slideLanding: 'battle.tips.landing', tiltLanding: 'battle.tips.landing', slope: 'battle.tips.landing', ditched: 'battle.tips.terrain',
       killed: 'battle.tips.soldier', fall: 'battle.tips.fall',
     });
-    for (const r of reasons) expect(deathTip(r, false), r).toBe(DEATH_TIPS[r]);
-    for (const r of reasons) expect(deathTip(r, true), r).toBe(r === 'killed' || r === 'fall' ? DEATH_TIPS[r] : 'battle.tips.missile');
-    expect(deathTip(undefined, false)).toBe('battle.tips.fire');
-    expect(deathTip(undefined, true)).toBe('battle.tips.missile');
+    for (const r of reasons) expect(deathTip(r, null), r).toBe(DEATH_TIPS[r]);
+    for (const k of KINDS) for (const r of reasons) expect(deathTip(r, k), `${r}/${k}`).toBe(r === 'killed' || r === 'fall' ? DEATH_TIPS[r] : MISSILE_TIP[k]);
+    expect(deathTip(undefined, null)).toBe('battle.tips.fire');
+    for (const k of KINDS) expect(deathTip(undefined, k), k).toBe(MISSILE_TIP[k]);
   });
 
-  it('never opens a death tip with the death line it sits under (#313)', () => {
+  it('never opens a death tip with any piece of the death line it sits under (#313, #298)', () => {
     const values: Record<CrashReason, number | undefined> = {
       rotorStrike: undefined, terrain: undefined, water: undefined, tree: undefined, building: undefined, ditched: undefined,
       hardLanding: 4.2, slideLanding: 3.1, tiltLanding: undefined, slope: undefined, rotorLoss: undefined, crewKilled: undefined,
@@ -195,23 +198,38 @@ describe('battle coach (wiki 8.10)', () => {
       ['none', null],
       ['shooter', { side: 'veros', defId: 'inf', weapon: 'g_rifle', dist: 120 }],
       ['weapon', { weapon: 'g_rifle', dist: 120 }],
+      ['ir', { side: 'veros', defId: 'manpads', weapon: 'missile_ir', dist: 1300 }],
+      ['radar', { side: 'veros', defId: 'sam_short', weapon: 'missile_radar', dist: 1500 }],
+      ...Object.keys(strings.battle.death.weapon).map(weapon => [weapon, { weapon, dist: 120 }] as [string, DeathHit]),
     ];
     const head = (tip: string) => tip.split('—')[0].replace(/\s+/g, ' ').trim();
     const repeats: string[] = [];
-    for (const reason of reasons) for (const [hit, info] of hits) for (const missile of [false, true]) {
-      const core = deathLine(reason, values[reason], info).split(' · ')[0].trim();
-      if (head(t(deathTip(reason, missile))).includes(core)) repeats.push(`${reason}/${hit}/${missile}`);
+    for (const reason of reasons) for (const [hit, info] of hits) for (const missile of [null, ...KINDS]) {
+      const pieces = deathLine(reason, values[reason], info).split(' · ').map(p => p.trim());
+      const tip = head(t(deathTip(reason, missile)));
+      for (const piece of pieces) if (tip.includes(piece)) repeats.push(`${reason}/${hit}/${missile}: ${piece}`);
     }
     expect(repeats).toEqual([]);
   });
 
   it('keeps the helicopter death tips', () => {
-    expect(deathTip('crewKilled', false)).toBe('battle.tips.fire');
-    expect(deathTip('rotorLoss', false)).toBe('battle.tips.fire');
-    expect(deathTip('crewKilled', true)).toBe('battle.tips.missile');
-    expect(deathTip('rotorLoss', true)).toBe('battle.tips.missile');
+    expect(deathTip('crewKilled', null)).toBe('battle.tips.fire');
+    expect(deathTip('rotorLoss', null)).toBe('battle.tips.fire');
+    expect(deathTip('crewKilled', 'ir')).toBe('battle.tips.missile');
+    expect(deathTip('rotorLoss', 'ir')).toBe('battle.tips.missile');
+    expect(deathTip('crewKilled', 'radar')).toBe('battle.tips.missileRadar');
+    expect(deathTip('rotorLoss', 'radar')).toBe('battle.tips.missileRadar');
     expect(t('battle.tips.fire')).toBe('적 대공에 맞았습니다 — 거점 위에서 오래 떠 있지 말고 능선 뒤에서 팝업하세요');
-    expect(t('battle.tips.missile')).toBe('적외선 미사일 — 경보가 울리면 플레어(F · 플레어 버튼)');
+  });
+
+  it('tells an infrared missile death to flare and a radar one to chaff, never the other (#298)', () => {
+    expect(t('battle.tips.missile')).toBe('미사일 경보가 울리면 바로 플레어(F · 플레어 버튼)');
+    expect(t('battle.tips.missileRadar')).toBe('미사일 경보가 울리면 바로 채프(X · 채프 버튼)');
+    for (const r of ['crewKilled', 'rotorLoss', undefined] as const) {
+      expect(t(deathTip(r, 'ir'))).not.toContain('채프');
+      expect(t(deathTip(r, 'radar'))).not.toContain('플레어');
+      expect(t(deathTip(r, null))).not.toMatch(/플레어|채프/);
+    }
   });
 
   it('picks the control card for the device in hand, with a line set for each', () => {

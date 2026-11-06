@@ -63,8 +63,6 @@ export function Battle({ choice, touch, settings, onSettings, onSetup, onTitle, 
   );
 }
 
-const MISSILES = new Set(['sa_ir', 'sam_radar', 'heli_aam', 'jet_aam']);
-
 function squadLabel(label: string) {
   const [, id, n] = label.split(':');
   return n ? t('battle.deploy.spawnSquadN', { id, n }) : t('battle.deploy.spawnSquad', { id });
@@ -74,15 +72,14 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
   const { session, runtime, mod, death, marks } = game;
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [, tick] = useState(0);
-  const tally = useRef({ kills: 0, deaths: 0, identified: 0, flips: 0, detected: 0, missileAt: -99, reason: undefined as CrashReason | undefined, missile: false, walked: 0, shots: 0, lastShot: -Infinity, at: null as { x: number; z: number } | null });
+  const tally = useRef({ kills: 0, deaths: 0, identified: 0, flips: 0, detected: 0, reason: undefined as CrashReason | undefined, walked: 0, shots: 0, lastShot: -Infinity, at: null as { x: number; z: number } | null });
   useEffect(() => session.world.events.onAny(e => {
-    const T = tally.current, now = session.world.time;
+    const T = tally.current;
     if (e.t === 'unitDestroyed' && e.byPlayer) T.kills++;
-    else if (e.t === 'crash') { T.deaths++; T.reason = e.reason; T.missile = now - T.missileAt < 3; }
+    else if (e.t === 'crash') { T.deaths++; T.reason = e.reason; }
     else if (e.t === 'identified') T.identified++;
     else if (e.t === 'pointOwner') T.flips++;
     else if (e.t === 'detected') T.detected++;
-    else if (e.t === 'playerHit' && MISSILES.has(e.weapon)) T.missileAt = now;
   }), [session]);
   const tipsRef = useRef(tips);
   tipsRef.current = tips;
@@ -140,7 +137,7 @@ export function BattleOverlays({ game, side, touch, tips, onTip, lastRole, onRol
         <div className="card wide">
           <h1>{t('battle.deploy.title')}</h1>
           {deathText && <p className="sub tip">{deathText}</p>}
-          {tally.current.deaths > 0 && <p className="sub tip">{t(deathTip(tally.current.reason, tally.current.missile))}</p>}
+          {tally.current.deaths > 0 && <p className="sub tip">{t(deathTip(tally.current.reason, death.missile()))}</p>}
           {respawnTip && <p className="sub tip">{t('battle.tips.dead')}</p>}
           <p className="sub">{t('battle.deploy.tickets', { c: Math.floor(c.tickets.coalition), v: Math.floor(c.tickets.veros) })} · {t('battle.deploy.elapsed', { t: clock(c.elapsed), limit: clock(runtime.rules.timeLimitSec) })} · {t('battle.deploy.points', { list: c.points.map(p => `${p.id}${p.owner === 'coalition' ? '■' : p.owner === 'veros' ? '▲' : '○'}`).join(' ') })}</p>
           <div className="setting-row"><span>{t('battle.deploy.role')}</span>

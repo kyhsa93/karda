@@ -3,12 +3,14 @@ import { hasString, t } from '../../content/strings';
 import type { CrashReason, SimEvent } from '../../sim/events';
 import type { FlightSession } from '../../sim/session';
 import type { Unit } from '../../sim/units';
+import type { ThreatKind } from '../../sim/weapons/enemyMissile';
 import { crashText } from '../flight/messages';
 import { sideSymbol } from './hud/symbols';
 
 export interface DeathHit { side?: string; defId?: string; weapon?: string; dist?: number }
 
 const BY_ENEMY = new Set<CrashReason>(['killed', 'crewKilled', 'rotorLoss']);
+const MISSILE_WEAPONS: Record<string, ThreatKind> = { missile_ir: 'ir', missile_radar: 'radar' };
 
 const label = (key: string) => (hasString(key) ? t(key) : '');
 
@@ -27,6 +29,10 @@ export function deathLine(reason: CrashReason, value?: number, hit?: DeathHit | 
   const cause = crashText(reason, value);
   if (!hit || !BY_ENEMY.has(reason)) return cause;
   return [shooterText(hit) || cause, hit.weapon ? label(`battle.death.weapon.${hit.weapon}`) : '', distText(hit.dist)].filter(Boolean).join(' · ');
+}
+
+export function lineMissile(reason: CrashReason, hit?: DeathHit | null): ThreatKind | null {
+  return hit?.weapon && BY_ENEMY.has(reason) ? MISSILE_WEAPONS[hit.weapon] ?? null : null;
 }
 
 export function firedWeapon(u: Pick<Unit, 'def'>, weapon: string) {
@@ -52,6 +58,10 @@ export class DeathReport {
 
   line() {
     return this.crash ? deathLine(this.crash.reason, this.crash.value, this.hit) : null;
+  }
+
+  missile() {
+    return this.crash ? lineMissile(this.crash.reason, this.hit) : null;
   }
 
   private clear() {
