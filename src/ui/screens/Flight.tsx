@@ -162,8 +162,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   }, [hud]);
 
   useEffect(() => {
-    session.paused = (help || contextLost) && snap.mode === 'play';
-  }, [session, help, contextLost, snap.mode]);
+    session.paused = (help || contextLost || portrait) && snap.mode === 'play';
+  }, [session, help, contextLost, portrait, snap.mode]);
 
   useEffect(() => {
     if (!contextLost) return;
@@ -334,7 +334,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const gear = gearButtons(sim);
 
   return (
-    <div className={`flight3d${touch ? ' touch' : ''}${session.respawns ? ' battle' : ''}`}>
+    <div className={`flight3d${touch ? ' touch' : ''}${session.respawns ? ' battle' : ''}${portrait && snap.mode === 'play' ? ' rotate' : ''}`}>
       <div
         ref={mountRef}
         className="viewport"
@@ -357,7 +357,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       )}
       <div className="messages" ref={msgRef} />
       <div className="radio-sub" ref={radioRef} style={{ display: 'none' }} />
-      {portrait && snap.mode === 'play' && <div className="overlay"><div className="card"><h1>↻</h1><p className="sub">{t('flight.rotate')}</p></div></div>}
+      {portrait && snap.mode === 'play' && !help && <div className="overlay"><div className="card"><h1>↻</h1><p className="sub">{t('flight.rotate')}</p></div></div>}
       {atFarp && <FarpMenu world={sim} />}
       <div className="hint" ref={hintRef} />
 
