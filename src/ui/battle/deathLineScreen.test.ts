@@ -10,7 +10,7 @@ import { STEP } from '../../sim/world';
 import { BattleOverlays } from './Battle';
 import { coachText, PointMarkBoard } from './coach';
 import { DeathReport } from './deathReport';
-import { BattleHud, TICKET_WARN } from './hud/BattleHud';
+import { BattleHud, RADIO_SECONDS, TICKET_WARN } from './hud/BattleHud';
 import { loadBattle } from './loadBattle';
 
 class FakeNode {
@@ -397,4 +397,120 @@ describe('first coach line on screen (#230)', () => {
       await vi.waitFor(() => expect(g.coach()[0]).toBe(coachText('rules.points', side, null)));
     });
   }
+});
+
+describe('why the tickets fell, on screen (#238)', () => {
+  let root: Root;
+  let container: FakeNode;
+
+  beforeEach(() => { container = fakeDom(); });
+  afterEach(async () => {
+    root.unmount();
+    await new Promise(done => setTimeout(done, 20));
+    vi.unstubAllGlobals();
+  });
+
+  const BEHIND = '거점 열세 — 우리 티켓이 계속 줄어드는 중';
+
+  async function screen() {
+    const mod = await loadBattle();
+    const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 7 });
+    session.start();
+    const death = new DeathReport(session, () => runtime.conquest.causes.coalition.player);
+    root = createRoot(container as unknown as HTMLElement);
+    const draw = () => root.render([
+      createElement(BattleHud, { key: 'hud', session, runtime, side: 'coalition', renderer: null, touch: false, death, marks: new PointMarkBoard() }),
+      createElement(BattleOverlays, { key: 'overlays', game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: 'coalition', touch: false, tips: ['card.soldier', 'rules.dead'], onTip: noop, onRole: noop, onAgain: noop, onSetup: noop, onTitle: noop }),
+    ]);
+    draw();
+    await vi.waitFor(() => expect(all(container, 'battle-canvas').length).toBe(1));
+    const radio = () => all(container, 'battle-radio').map(n => n.textContent);
+    const D = runtime.conquest.points.find(p => p.id === 'D')!;
+    const take = (owner: 'coalition' | 'veros') => {
+      const from = D.owner;
+      D.owner = owner;
+      D.v = owner === 'veros' ? -100 : 100;
+      session.world.emit({ t: 'pointOwner', id: 'D', owner, from });
+      session.world.events.flush();
+    };
+    const later = (s: number) => { session.world.time += s; };
+    return { session, runtime, draw, radio, take, later };
+  }
+
+  it('calls the bleed once on the radio, after the point call that started it, and again after we led', async () => {
+    const g = await screen();
+    g.session.deploy(SOLDIER);
+    g.take('veros');
+    await vi.waitFor(() => expect(g.radio()).toEqual([t('battle.hud.point.enemy', { id: 'D' })]));
+    g.later(RADIO_SECONDS + 0.1);
+    await vi.waitFor(() => expect(g.radio()).toEqual([BEHIND]));
+    g.later(RADIO_SECONDS + 0.1);
+    await vi.waitFor(() => expect(g.radio()).toEqual([]));
+    await new Promise(done => setTimeout(done, 300));
+    expect(g.radio()).toEqual([]);
+    g.take('coalition');
+    await vi.waitFor(() => expect(g.radio()).toEqual([t('battle.hud.point.captured', { id: 'D' })]));
+    g.later(RADIO_SECONDS + 0.1);
+    await vi.waitFor(() => expect(g.radio()).toEqual([]));
+    g.take('veros');
+    await vi.waitFor(() => expect(g.radio()).toEqual([t('battle.hud.point.lost', { id: 'D' })]));
+    g.later(RADIO_SECONDS + 0.1);
+    await vi.waitFor(() => expect(g.radio()).toEqual([BEHIND]));
+  }, 20000);
+
+  it('holds a bleed that starts while dead until the next life', async () => {
+    const g = await screen();
+    g.session.deploy(SOLDIER);
+    g.session.world.killPlayer('killed');
+    for (let i = 0; i < 2; i++) g.session.step(STEP);
+    g.take('veros');
+    await vi.waitFor(() => expect(g.radio()).toEqual(['전사했습니다 · 티켓 -1']));
+    g.later(RADIO_SECONDS + 0.1);
+    await new Promise(done => setTimeout(done, 300));
+    expect(g.radio()).toEqual(['전사했습니다 · 티켓 -1']);
+    while (g.session.mode === 'crashed' || g.session.deployIn() > 0) g.session.step(STEP);
+    expect(g.session.deploy(SOLDIER)).toBe(true);
+    await vi.waitFor(() => expect(g.radio()).toEqual([BEHIND]));
+  }, 20000);
+
+  it('puts the ticket cost on the deploy screen death line too', async () => {
+    const g = await screen();
+    g.session.deploy(SOLDIER);
+    g.session.world.killPlayer('killed');
+    for (let i = 0; i < 2; i++) g.session.step(STEP);
+    while (g.session.mode === 'crashed') g.session.step(STEP);
+    await vi.waitFor(() => expect(all(container, 'tip')[0]?.textContent).toBe('전사했습니다 · 티켓 -1'));
+  }, 20000);
+
+  it('lists the tickets lost by cause on the report, copied at the end of the match', async () => {
+    const g = await screen();
+    const c = g.runtime.conquest, w = g.session.world, start = g.runtime.rules.tickets;
+    let atEnd: typeof c.causes.coalition | null = null;
+    w.events.on('battleEnd', () => { atEnd = { ...c.causes.coalition }; });
+    g.session.frozen = false;
+    g.take('veros');
+    for (let i = 0; i < 3 / STEP; i++) g.session.step(STEP);
+    const squad = w.units.find(u => u.side === 'coalition' && u.def.squad && u.alive)!;
+    const car = w.units.find(u => u.side === 'coalition' && !u.def.squad && u.def.move && !u.def.move.air && u.alive)!;
+    w.damageUnit(squad, squad.def.hp / 2, false);
+    w.damageUnit(car, 1e9, false);
+    while (c.tickets.coalition > 0) c.playerDied('coalition', 'attackHeli');
+    for (let i = 0; g.session.mode !== 'done' && i < 10 / STEP; i++) g.session.step(STEP);
+    expect(g.session.mode).toBe('done');
+    expect(c.winner).toBe('veros');
+    const end = atEnd!;
+    for (const k of ['bleed', 'person', 'vehicle', 'player'] as const) expect(end[k], k).toBeGreaterThan(0);
+    const sum = end.bleed + end.person + end.vehicle + end.player, clamp = sum - (start - c.tickets.coalition);
+    expect(c.tickets.coalition).toBe(0);
+    expect(clamp).toBeGreaterThan(0);
+    expect(clamp).toBeCloseTo(sum - start, 9);
+    const line = () => all(all(container, 'report')[0] ?? container, 'sub').map(n => n.textContent).find(s => s.startsWith('잃은 티켓'));
+    const text = `잃은 티켓: 거점 열세 ${Math.floor(end.bleed)} · 병력 ${Math.floor(end.person)} · 탈것 ${Math.floor(end.vehicle)} · 나 ${Math.floor(end.player)}`;
+    await vi.waitFor(() => expect(line()).toBe(text));
+    c.causes.coalition.person += 50;
+    c.causes.coalition.bleed += 50;
+    g.draw();
+    await new Promise(done => setTimeout(done, 200));
+    expect(line()).toBe(text);
+  }, 30000);
 });

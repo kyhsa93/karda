@@ -6,6 +6,7 @@ import type { Unit } from '../../sim/units';
 import type { ThreatKind } from '../../sim/weapons/enemyMissile';
 import { crashText } from '../flight/messages';
 import { sideSymbol } from './hud/symbols';
+import { withTickets } from './tickets';
 
 export interface DeathHit { side?: string; defId?: string; weapon?: string; dist?: number }
 
@@ -50,14 +51,16 @@ export class DeathReport {
   private fatal = false;
   private crash: { reason: CrashReason; value?: number; at: number } | null = null;
   private launches = new Map<number, { side?: string; defId?: string; weapon: string; from: Vector3 }>();
+  private paidBefore: number;
 
-  constructor(private readonly session: FlightSession) {
+  constructor(private readonly session: FlightSession, private readonly paid: () => number = () => 0) {
+    this.paidBefore = paid();
     session.world.events.onAny(e => this.onEvent(e));
     session.subscribe(() => { if (session.crash === null) this.clear(); });
   }
 
   line() {
-    return this.crash ? deathLine(this.crash.reason, this.crash.value, this.hit) : null;
+    return this.crash ? withTickets(deathLine(this.crash.reason, this.crash.value, this.hit), this.paid() - this.paidBefore) : null;
   }
 
   missile() {
@@ -68,6 +71,7 @@ export class DeathReport {
     this.hit = null;
     this.fatal = false;
     this.crash = null;
+    this.paidBefore = this.paid();
   }
 
   private onEvent(e: SimEvent) {

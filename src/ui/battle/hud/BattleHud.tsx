@@ -16,6 +16,7 @@ import { INFANTRY_WEAPONS } from '../../../sim/infantry/arms';
 import { clearOf, pointMarkBox, type Box, type PointMarkBoard } from '../coach';
 import { statusLines } from './soldierStatus';
 import { radioLine, type DeathReport } from '../deathReport';
+import { behind, BehindCall } from '../tickets';
 
 type Side = 'coalition' | 'veros';
 
@@ -59,6 +60,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
   const feed = useRef<{ text: string; mine: boolean; until: number }[]>([]);
   const radio = useRef<{ text: string; until: number } | null>(null);
   const warned = useRef(new Set<number>());
+  const [behindCall] = useState(() => new BehindCall(behind(runtime.conquest.points, side)));
   const hitMark = useRef({ until: -1, kill: false });
   const hurt = useRef<{ x: number; z: number; until: number }[]>([]);
 
@@ -237,6 +239,8 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
     if (own <= n && !warned.current.has(n)) { warned.current.add(n); radio.current = { text: t('battle.hud.tickets', { n }), until: world.time + RADIO_SECONDS }; }
   }
   const now = world.time;
+  const radioFree = session.mode === 'play' && !(radio.current && radio.current.until > now);
+  if (behindCall.step(behind(c.points, side), radioFree)) radio.current = { text: t('battle.hud.behind'), until: now + RADIO_SECONDS };
   const lines = feed.current.filter(f => f.until > now);
   const total = Math.max(1, own + enemy);
   const radioText = radioLine(session.mode, death.line(), radio.current, now);
