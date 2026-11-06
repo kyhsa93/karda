@@ -6,6 +6,9 @@ import { hasString, t, tList } from '../../content/strings';
 import { SOLDIER_COMMANDS } from '../../input/roles';
 import type { Command } from '../../input/bindings';
 import harek from '../../content/battle/maps/harek.json';
+import strings from '../../content/strings.ko.json';
+import type { CrashReason } from '../../sim/events';
+import { deathLine, type DeathHit } from './deathReport';
 
 const base: CoachFacts = { agl: 60, tads: false, identified: 0, flips: 0, detected: 0, deaths: 0, playing: true, foot: false, walked: 0, shots: 0, inPoint: false };
 const foot: CoachFacts = { ...base, foot: true };
@@ -155,6 +158,28 @@ describe('battle coach (wiki 8.10)', () => {
     const line = t(deathTip('killed', false));
     expect(line).not.toBe('battle.tips.soldier');
     expect(line).not.toMatch(/대공|팝업/);
+  });
+
+  it('never opens a death tip with the death line it sits under (#313)', () => {
+    const values: Record<CrashReason, number | undefined> = {
+      rotorStrike: undefined, terrain: undefined, water: undefined, tree: undefined, building: undefined, ditched: undefined,
+      hardLanding: 4.2, slideLanding: 3.1, tiltLanding: undefined, slope: undefined, rotorLoss: undefined, crewKilled: undefined,
+      outOfBounds: undefined, killed: undefined, fall: undefined,
+    };
+    const reasons = Object.keys(values) as CrashReason[];
+    expect(reasons.sort()).toEqual(Object.keys(strings.crash).filter(k => k !== 'title' && k !== 'retry').sort());
+    const hits: [string, DeathHit | null][] = [
+      ['none', null],
+      ['shooter', { side: 'veros', defId: 'inf', weapon: 'g_rifle', dist: 120 }],
+      ['weapon', { weapon: 'g_rifle', dist: 120 }],
+    ];
+    const head = (tip: string) => tip.split('—')[0].replace(/\s+/g, ' ').trim();
+    const repeats: string[] = [];
+    for (const reason of reasons) for (const [hit, info] of hits) for (const missile of [false, true]) {
+      const core = deathLine(reason, values[reason], info).split(' · ')[0].trim();
+      if (head(t(deathTip(reason, missile))).includes(core)) repeats.push(`${reason}/${hit}/${missile}`);
+    }
+    expect(repeats).toEqual([]);
   });
 
   it('keeps the helicopter death tips', () => {
