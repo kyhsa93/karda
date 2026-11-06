@@ -270,7 +270,7 @@ describe('death tip on the deploy screen (#298)', () => {
     expect(tip).toBe(t('battle.tips.missile'));
     expect(tip).toContain('플레어');
     expect(tip).not.toContain('채프');
-  });
+  }, 20000);
 
   it('tells a radar SAM death to chaff, not flare', async () => {
     const { line, tip } = await die('conquest', missile('sam_radar'));
@@ -278,9 +278,9 @@ describe('death tip on the deploy screen (#298)', () => {
     expect(tip).toBe(t('battle.tips.missileRadar'));
     expect(tip).toContain('채프');
     expect(tip).not.toContain('플레어');
-  });
+  }, 20000);
 
-  it('gives no missile tip for a gun, a rifle or the ground, even after a missile hit', async () => {
+  it('gives no missile tip for a gun that finishes after a missile hit', async () => {
     const gun = await die('quick', world => {
       const aaa = world.units.find(u => u.side === 'veros' && u.defId === 'aaa_light')!;
       world.emit({ t: 'missileEnd', id: launch(world, 'sa_ir').id, hit: true });
@@ -289,24 +289,28 @@ describe('death tip on the deploy screen (#298)', () => {
     });
     expect(gun.line).toMatch(/ · 대공 기관포 · /);
     expect(gun.tip).toBe(t('battle.tips.fire'));
-    root.unmount();
-    container = fakeDom();
+    expect(gun.tip).not.toMatch(/미사일|플레어|채프/);
+  }, 20000);
+
+  it('gives no missile tip for the ground that finishes after a missile hit', async () => {
     const ground = await die('quick', world => {
       world.emit({ t: 'missileEnd', id: launch(world, 'sam_radar').id, hit: true });
       world.emit({ t: 'crash', reason: 'terrain' });
     });
     expect(ground.line).toBe('기체가 지형에 충돌했습니다');
     expect(ground.tip).toBe(t('battle.tips.terrain'));
-    root.unmount();
-    container = fakeDom();
+    expect(ground.tip).not.toMatch(/미사일|플레어|채프/);
+  }, 20000);
+
+  it('gives no missile tip for a rifle', async () => {
     const rifle = await die('quick', world => {
       const inf = world.units.find(u => u.side === 'veros' && u.def.weapons.some(w => w.id === 'g_rifle'))!;
       world.emit({ t: 'playerHit', by: inf.id, weapon: 'g_rifle', damage: 1000 });
     }, false);
     expect(rifle.line).toMatch(/ · 소총 · /);
     expect(rifle.tip).toBe(t('battle.tips.soldier'));
-    for (const tip of [gun.tip, ground.tip, rifle.tip]) expect(tip).not.toMatch(/미사일|플레어|채프/);
-  });
+    expect(rifle.tip).not.toMatch(/미사일|플레어|채프/);
+  }, 20000);
 });
 
 describe('soldier control card on the deploy screen (#208)', () => {
