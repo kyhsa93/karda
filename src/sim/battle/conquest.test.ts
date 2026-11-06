@@ -168,3 +168,85 @@ describe('battle end through the session', () => {
     expect(runtime.result).toMatchObject({ winner: 1, coalition: 0 });
   });
 });
+
+const spent = (c: Conquest, side: 'coalition' | 'veros') => {
+  const k = c.causes[side];
+  return k.bleed + k.person + k.vehicle + k.player;
+};
+
+describe('ticket causes (#237)', () => {
+  it('tallies bleed, squad members, vehicles and the player apart per side', () => {
+    const { world, c } = setup();
+    expect(c.causes).toEqual({
+      coalition: { bleed: 0, person: 0, vehicle: 0, player: 0 },
+      veros: { bleed: 0, person: 0, vehicle: 0, player: 0 },
+    });
+    const g = c.points.find(p => p.id === 'G')!;
+    g.owner = 'neutral'; g.v = 0;
+    tick(world, c, 60);
+    expect(c.causes.veros.bleed).toBeCloseTo(6, 9);
+    const squad = world.spawnUnit('inf', 3000, 3000);
+    const tank = world.spawnUnit('tank', 3100, 3000);
+    const truck = world.spawnUnit('c_truck', 3200, 3000);
+    tick(world, c, 1);
+    world.damageUnit(squad, 100, false);
+    world.damageUnit(tank, 1000, false);
+    world.damageUnit(truck, 1000, false);
+    tick(world, c, 1);
+    c.playerDied('coalition', 'attackHeli');
+    c.playerDied('veros', null);
+    expect(c.causes.veros).toMatchObject({ person: 5, vehicle: 4, player: 1 });
+    expect(c.causes.coalition).toEqual({ bleed: 0, person: 0, vehicle: 2, player: 6 });
+    for (const s of SIDES) expect(300 - c.tickets[s]).toBeCloseTo(spent(c, s), 9);
+  });
+
+  it('stops counting once the battle is over', () => {
+    const { world, c } = setup();
+    c.tickets.veros = 3;
+    c.playerDied('veros', 'attackHeli');
+    tick(world, c, 1);
+    expect(c.winner).toBe('coalition');
+    expect(c.causes.veros.player).toBe(6);
+    const after = structuredClone(c.causes);
+    c.playerDied('veros', 'attackHeli');
+    tick(world, c, 3);
+    expect(c.causes).toEqual(after);
+  });
+
+  it('carries the player\'s helicopter death through the session', () => {
+    const { session, runtime } = createBattleSession(harek, 'quick', { side: 'veros', seed: 3 });
+    session.start();
+    session.deploy(runtime.spawnFor(runtime.spawnPoints(session.world)[0], STANDARD_LOADOUT));
+    session.world.killPlayer('crewKilled');
+    for (let i = 0; i < 120 * 3; i++) session.step(STEP);
+    expect(runtime.conquest.causes.veros.player).toBe(runtime.rules.ticketCost.person + runtime.rules.ticketCost.attackHeli);
+  });
+
+  it('accounts for every ticket a full match spends, ten seeds, the rest being the end clamp', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const { session, runtime } = createBattleSession(harek, 'quick', { side: 'coalition', seed });
+      session.start();
+      session.frozen = false;
+      const c = runtime.conquest, start = runtime.rules.tickets;
+      const limit = (runtime.rules.timeLimitSec + 30) * 120;
+      let drift = 0;
+      for (let i = 0; session.mode !== 'done' && i < limit; i++) {
+        session.step(STEP);
+        if (!c.winner) for (const s of SIDES) drift = Math.max(drift, Math.abs(start - c.tickets[s] - spent(c, s)));
+      }
+      const name = `seed ${seed}`;
+      expect(c.winner, name).not.toBeNull();
+      expect(drift, name).toBeLessThan(1e-6);
+      for (const s of SIDES) {
+        const sum = spent(c, s), clamped = sum - (start - c.tickets[s]);
+        expect(clamped, `${name} ${s}`).toBeCloseTo(Math.max(0, sum - start), 6);
+        if (c.tickets[s] > 0) expect(clamped, `${name} ${s}`).toBeCloseTo(0, 6);
+      }
+      const loser = c.loser(c.winner!);
+      if (loser) {
+        expect(c.causes[loser].bleed, name).toBeGreaterThan(0);
+        expect(c.causes[loser].person, name).toBeGreaterThan(0);
+      }
+    }
+  }, 180000);
+});
