@@ -18,6 +18,7 @@ import { statusLines } from './soldierStatus';
 import { radioLine, type DeathReport } from '../deathReport';
 import { behind, BehindCall } from '../tickets';
 import { hitMarkColor, nextHitMark, NO_HIT_MARK, type HitMark } from './hitMark';
+import { buttonTextBoxes, centerDim, overlapArea, PILL_FILL, PILL_RADIUS, planTargetMark } from './targetMark';
 
 type Side = 'coalition' | 'veros';
 
@@ -54,15 +55,25 @@ export const OVERVIEW_BACK = 400;
 export const RADIO_SLOT = '.battle-hud .battle-radio';
 export const TOUCH_CONTROLS = `.sticks .tbtn, .sticks .stick, .sticks .stick span, ${RADIO_SLOT}`;
 
-function markBlocks(doc: Document | null | undefined, touch: boolean, panel: Box | null, minimap: Box): Box[] {
+function controlBoxes(doc: Document | null | undefined, touch: boolean): Box[] {
   const found = doc?.querySelectorAll?.(touch ? TOUCH_CONTROLS : RADIO_SLOT) ?? [];
-  const boxes: Box[] = [...found].map(e => e.getBoundingClientRect()).filter(r => r.right > r.left && r.bottom > r.top);
-  return panel ? [...boxes, panel, minimap] : [...boxes, minimap];
+  return [...found].map(e => e.getBoundingClientRect()).filter(r => r.right > r.left && r.bottom > r.top);
+}
+
+type Hit = ReturnType<typeof hitMarkColor>;
+
+function drawAim(g: CanvasRenderingContext2D, cx: number, cy: number, gap: number, hit: Hit) {
+  g.strokeStyle = 'rgba(232,238,247,.9)'; g.lineWidth = 2;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { g.beginPath(); g.moveTo(cx + dx * gap, cy + dy * gap); g.lineTo(cx + dx * (gap + 9), cy + dy * (gap + 9)); g.stroke(); }
+  if (!hit) return;
+  g.strokeStyle = hit === 'kill' ? '#ff4d4d' : '#ffffff'; g.lineWidth = hit === 'kill' ? 4 : 2;
+  for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { g.beginPath(); g.moveTo(cx + dx * 6, cy + dy * 6); g.lineTo(cx + dx * 14, cy + dy * 14); g.stroke(); }
 }
 
 export function BattleHud({ session, runtime, side, renderer, touch, death, marks: pointMarks }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean; death: DeathReport; marks: PointMarkBoard }) {
   const world = session.world;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const topRef = useRef<HTMLCanvasElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
   const feed = useRef<{ text: string; mine: boolean; until: number }[]>([]);
@@ -126,6 +137,16 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
     let raf = 0;
     const v = new THREE.Vector3();
     const marks = new CaptureMarks();
+    let topShown = false;
+    const hideTop = () => {
+      const t = topRef.current;
+      if (!topShown || !t) return;
+      topShown = false;
+      const tg = t.getContext('2d')!;
+      tg.setTransform(1, 0, 0, 1, 0, 0);
+      tg.clearRect(0, 0, t.width, t.height);
+      t.style.visibility = 'hidden';
+    };
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const c = canvasRef.current;
@@ -137,7 +158,7 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
       g.clearRect(0, 0, w, h);
       flagsRef.current?.update(runtime.conquest.points, (x, z) => world.terrain.surfaceAt(x, z), Math.atan2(world.wind.x, world.wind.z));
       marks.update(runtime.conquest.points, world.time);
-      if (session.mode !== 'play') { pointMarks.clear(); return; }
+      if (session.mode !== 'play') { pointMarks.clear(); hideTop(); return; }
       const size = touch ? MINIMAP.touch : MINIMAP.desktop;
       const mx = touch ? 72 : 16, my = touch ? 12 : h - size - 16;
       const cam = renderer?.camera;
@@ -145,9 +166,12 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
       g.font = '600 13px "Karda Sans", sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      const label = (text: string, x: number, y: number, color: string) => {
-        g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.7)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+      const labelOn = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string) => {
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y);
       };
+      const label = (text: string, x: number, y: number, color: string) => labelOn(g, text, x, y, color);
+      type Drawn = { p: Point; x: number; y: number; d: number; rear: boolean; symbol: string; mark: ReturnType<CaptureMarks['of']>; text: string; width: number; alpha: number };
+      let topMark: { m: Drawn; pill: Box | null } | null = null;
       if (cam) {
         cam.updateMatrixWorld();
         const project = (x: number, y: number, z: number) => {
@@ -155,9 +179,10 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
           return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, front: v.z < 1 };
         };
         const panel = statusRef.current?.getBoundingClientRect() ?? null;
-        const rearOnTouch = touch ? nearestOpenPoint(runtime.conquest.points, side, me.x, me.z) : null;
+        const targetId = nearestOpenPoint(runtime.conquest.points, side, me.x, me.z);
+        const rearOnTouch = touch ? targetId : null;
         const edge = 48;
-        const drawnMarks = [];
+        const drawnMarks: Drawn[] = [];
         for (const p of runtime.conquest.points) {
           const s = project(p.x, world.terrain.surfaceAt(p.x, p.z) + 16, p.z);
           let x = s.x, y = s.y;
@@ -171,19 +196,35 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
           const text = `${symbol}${mark ? RING_LABEL_GAP : ' '}${p.id} ${d >= 1000 ? `${(d / 1000).toFixed(1)}km` : `${Math.round(d)}m`}`;
           const width = g.measureText(text).width;
           x = clearOf(x, y, width, panel);
-          drawnMarks.push({ p, x, y, d, rear: !s.front, symbol, mark, text, width });
+          drawnMarks.push({ p, x, y, d, rear: !s.front, symbol, mark, text, width, alpha: 1 });
         }
         const placed = drawnMarks.filter(m => !m.rear).map(m => pointMarkBox(m.x, m.y, m.width));
         const rear = drawnMarks.filter(m => m.rear).sort((a, b) => a.d - b.d);
-        const blocks = rear.length ? markBlocks(c.ownerDocument, touch, panel, { left: mx, right: mx + size, top: my, bottom: my + size }) : [];
+        const target = drawnMarks.find(m => !m.rear && m.p.id === targetId);
+        const doc = c.ownerDocument;
+        const minimapBox = { left: mx, right: mx + size, top: my, bottom: my + size };
+        const controls = rear.length || target ? controlBoxes(doc, touch) : [];
+        const blocks = panel ? [...controls, panel, minimapBox] : [...controls, minimapBox];
         for (const m of rear) {
           ({ x: m.x, y: m.y } = clearOfAll(m.x, m.y, m.width, blocks, w, edge, placed));
           placed.push(pointMarkBox(m.x, m.y, m.width));
         }
-        for (const { p, x, y, symbol, mark, text, width } of drawnMarks) {
-          label(text, x, y, pointColor(p.owner, side));
-          if (mark) drawRing(g, x + (g.measureText(symbol).width - width) / 2, y, mark, pointColor(mark.owner, side));
+        if (target) {
+          const others = drawnMarks.filter(m => m !== target).map(m => pointMarkBox(m.x, m.y, m.width));
+          const onAny = (list: readonly Box[]) => { const b = pointMarkBox(target.x, target.y, target.width); return list.some(o => overlapArea(b, o) > 0); };
+          let pill: Box | null = null;
+          if (onAny(controls) || onAny(others)) ({ y: target.y, pill } = planTargetMark(target.x, target.y, target.width, buttonTextBoxes(doc), others, h));
+          if (onAny(controls)) topMark = { m: target, pill };
         }
+        for (const m of drawnMarks) m.alpha = centerDim(pointMarkBox(m.x, m.y, m.width), w, h, m === target);
+        if (topMark && topMark.m.alpha < 1 && world.avatar.kind !== 'soldier') topMark.pill = null;
+        for (const m of drawnMarks) {
+          if (m === topMark?.m) continue;
+          g.globalAlpha = m.alpha;
+          label(m.text, m.x, m.y, pointColor(m.p.owner, side));
+          if (m.mark) drawRing(g, m.x + (g.measureText(m.symbol).width - m.width) / 2, m.y, m.mark, pointColor(m.mark.owner, side));
+        }
+        g.globalAlpha = 1;
         pointMarks.publish(drawnMarks.map(m => pointMarkBox(m.x, m.y, m.width)), performance.now());
         for (const u of world.units) {
           if (!u.alive || u.side !== side || !u.def.move) continue;
@@ -224,17 +265,13 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
       for (const u of runtime.spotting.markers(world)) dot(u.pos.x, u.pos.z, '◆', COLORS.enemy);
       g.restore();
       const s = world.avatar.kind === 'soldier' ? world.soldier : null;
+      let aim: { gap: number; hit: Hit } | null = null;
       if (s && cam) {
         const cx0 = w / 2, cy0 = h / 2, arms = world.soldierArms, wd = INFANTRY_WEAPONS[arms.selected];
         const spread = ((world.soldierCommands.ads ? wd.spreadAdsDeg : wd.spreadHipDeg) * arms.bloom * Math.PI) / 180;
         const gap = Math.max(3, (Math.tan(spread) / Math.tan(((cam as THREE.PerspectiveCamera).fov * Math.PI) / 360)) * (h / 2));
-        g.strokeStyle = 'rgba(232,238,247,.9)'; g.lineWidth = 2;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { g.beginPath(); g.moveTo(cx0 + dx * gap, cy0 + dy * gap); g.lineTo(cx0 + dx * (gap + 9), cy0 + dy * (gap + 9)); g.stroke(); }
-        const mark = hitMarkColor(hitMark.current, world.time);
-        if (mark) {
-          g.strokeStyle = mark === 'kill' ? '#ff4d4d' : '#ffffff'; g.lineWidth = mark === 'kill' ? 4 : 2;
-          for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { g.beginPath(); g.moveTo(cx0 + dx * 6, cy0 + dy * 6); g.lineTo(cx0 + dx * 14, cy0 + dy * 14); g.stroke(); }
-        }
+        aim = { gap, hit: hitMarkColor(hitMark.current, world.time) };
+        drawAim(g, cx0, cy0, aim.gap, aim.hit);
         for (const hh of hurt.current) {
           if (hh.until <= world.time) continue;
           const bearing = Math.atan2(-(hh.x - s.pos.x), -(hh.z - s.pos.z)) - s.yaw;
@@ -246,9 +283,26 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
       g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
       g.fillStyle = COLORS.text;
       g.beginPath(); g.moveTo(cx, cy - 6); g.lineTo(cx - 4, cy + 4); g.lineTo(cx + 4, cy + 4); g.closePath(); g.fill();
+      const t = topRef.current;
+      if (!topMark || !t) { hideTop(); return; }
+      if (t.width !== c.width || t.height !== c.height) { t.width = c.width; t.height = c.height; }
+      const tg = t.getContext('2d')!;
+      tg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      tg.clearRect(0, 0, w, h);
+      if (!topShown) { t.style.visibility = 'visible'; topShown = true; }
+      const { m, pill } = topMark;
+      tg.globalAlpha = m.alpha;
+      if (pill) { tg.fillStyle = PILL_FILL; tg.beginPath(); tg.roundRect(pill.left, pill.top, pill.right - pill.left, pill.bottom - pill.top, PILL_RADIUS); tg.fill(); }
+      tg.font = '600 13px "Karda Sans", sans-serif';
+      tg.textAlign = 'center';
+      tg.textBaseline = 'middle';
+      labelOn(tg, m.text, m.x, m.y, pointColor(m.p.owner, side));
+      if (m.mark) drawRing(tg, m.x + (tg.measureText(m.symbol).width - m.width) / 2, m.y, m.mark, pointColor(m.mark.owner, side));
+      tg.globalAlpha = 1;
+      if (aim && m.alpha < 1) drawAim(tg, w / 2, h / 2, aim.gap, aim.hit);
     };
     draw();
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); hideTop(); };
   }, [renderer, runtime, session, world, side, touch, pointMarks]);
 
   const c = runtime.conquest;
@@ -262,10 +316,11 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
   const lines = feed.current.filter(f => f.until > now);
   const total = Math.max(1, own + enemy);
   const radioText = radioLine(session.mode, death.line(), radio.current, now);
-  if (session.mode !== 'play' && session.mode !== 'crashed') return <canvas ref={canvasRef} className="battle-canvas" />;
+  const canvases = <><canvas ref={canvasRef} className="battle-canvas" /><canvas ref={topRef} className="battle-top" /></>;
+  if (session.mode !== 'play' && session.mode !== 'crashed') return <>{canvases}</>;
   return (
     <>
-      <canvas ref={canvasRef} className="battle-canvas" />
+      {canvases}
       <div className={touch ? (session.mode === 'play' && world.avatar.kind === 'heli' ? 'battle-hud touch heli' : 'battle-hud touch') : 'battle-hud'}>
         <div className="tickets">
           <div className="ticket-row">

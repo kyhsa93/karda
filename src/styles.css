@@ -8,7 +8,7 @@ body {
 
 .overlay {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(6, 12, 22, .74); text-align: center; padding: 16px; box-sizing: border-box; z-index: 5;
+  background: rgba(6, 12, 22, .74); text-align: center; padding: 16px; box-sizing: border-box; z-index: 7;
   overflow-y: auto; align-items: safe center;
 }
 .card { max-width: 440px; width: 100%; margin: auto 0; }
@@ -66,7 +66,7 @@ button.go {
 }
 .tads-row { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom)); display: flex; gap: 8px; pointer-events: auto; }
 .tads-row .tbtn { position: static; }
-.farp-menu { position: fixed; right: calc(16px + env(safe-area-inset-right)); top: calc(56px + env(safe-area-inset-top)); z-index: 4; max-width: min(420px, calc(100vw - 32px));
+.farp-menu { position: fixed; right: calc(16px + env(safe-area-inset-right)); top: calc(56px + env(safe-area-inset-top)); z-index: 6; max-width: min(420px, calc(100vw - 32px));
   background: rgba(8, 14, 24, .82); border: 1px solid rgba(76, 201, 240, .5); border-radius: 12px; padding: 10px 14px;
   display: flex; flex-direction: column; gap: 6px; align-items: center; color: #e8eef7; font-size: 14px; max-width: calc(100vw - 32px); }
 .farp-menu .row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
@@ -206,6 +206,7 @@ button.mode:disabled { opacity: .45; cursor: default; }
 .choice button:disabled { opacity: .55; cursor: default; }
 
 .battle-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+.battle-top { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; visibility: hidden; }
 .battle-hud { position: fixed; inset: 0; pointer-events: none; z-index: 3; color: #e8eef7; font-size: 14px; }
 .battle-hud .tickets { position: absolute; left: calc(16px + env(safe-area-inset-left)); top: calc(12px + env(safe-area-inset-top)); background: rgba(6, 12, 22, .6); border-radius: 8px; padding: 6px 10px; }
 .battle-hud.touch .tickets { left: calc(12px + env(safe-area-inset-left)); top: calc(130px + env(safe-area-inset-top)); font-size: 12px; padding: 4px 8px; }
