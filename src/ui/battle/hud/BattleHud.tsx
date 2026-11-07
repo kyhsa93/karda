@@ -51,12 +51,13 @@ function unitName(u: { defId: string; side: string }) {
 }
 
 export const OVERVIEW_BACK = 400;
-export const TOUCH_CONTROLS = '.sticks .tbtn, .sticks .stick, .sticks .stick span, .battle-hud .battle-radio';
+export const RADIO_SLOT = '.battle-hud .battle-radio';
+export const TOUCH_CONTROLS = `.sticks .tbtn, .sticks .stick, .sticks .stick span, ${RADIO_SLOT}`;
 
-function touchControlBoxes(doc: Document | null | undefined, panel: Box | null): Box[] {
-  const found = doc?.querySelectorAll?.(TOUCH_CONTROLS) ?? [];
+function markBlocks(doc: Document | null | undefined, touch: boolean, panel: Box | null, minimap: Box): Box[] {
+  const found = doc?.querySelectorAll?.(touch ? TOUCH_CONTROLS : RADIO_SLOT) ?? [];
   const boxes: Box[] = [...found].map(e => e.getBoundingClientRect()).filter(r => r.right > r.left && r.bottom > r.top);
-  return panel ? [...boxes, panel] : boxes;
+  return panel ? [...boxes, panel, minimap] : [...boxes, minimap];
 }
 
 export function BattleHud({ session, runtime, side, renderer, touch, death, marks: pointMarks }: { session: FlightSession; runtime: Runtime; side: Side; renderer: FlightRenderer | null; touch: boolean; death: DeathReport; marks: PointMarkBoard }) {
@@ -137,6 +138,8 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
       flagsRef.current?.update(runtime.conquest.points, (x, z) => world.terrain.surfaceAt(x, z), Math.atan2(world.wind.x, world.wind.z));
       marks.update(runtime.conquest.points, world.time);
       if (session.mode !== 'play') { pointMarks.clear(); return; }
+      const size = touch ? MINIMAP.touch : MINIMAP.desktop;
+      const mx = touch ? 72 : 16, my = touch ? 12 : h - size - 16;
       const cam = renderer?.camera;
       const me = world.playerBody().pos;
       g.font = '600 13px "Karda Sans", sans-serif';
@@ -151,13 +154,12 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
           v.set(x, y, z).project(cam);
           return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, front: v.z < 1 };
         };
-        const boxes: Box[] = [];
         const panel = statusRef.current?.getBoundingClientRect() ?? null;
-        let controls: Box[] | null = null;
         const rearOnTouch = touch ? nearestOpenPoint(runtime.conquest.points, side, me.x, me.z) : null;
+        const edge = 48;
+        const drawnMarks = [];
         for (const p of runtime.conquest.points) {
           const s = project(p.x, world.terrain.surfaceAt(p.x, p.z) + 16, p.z);
-          const edge = 48;
           let x = s.x, y = s.y;
           if (!s.front && touch && p.id !== rearOnTouch) continue;
           if (!s.front) { x = w - x; y = h - edge; }
@@ -169,15 +171,20 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
           const text = `${symbol}${mark ? RING_LABEL_GAP : ' '}${p.id} ${d >= 1000 ? `${(d / 1000).toFixed(1)}km` : `${Math.round(d)}m`}`;
           const width = g.measureText(text).width;
           x = clearOf(x, y, width, panel);
-          if (!s.front && touch) {
-            controls ??= touchControlBoxes(c.ownerDocument, panel);
-            ({ x, y } = clearOfAll(x, y, width, controls, w, edge));
-          }
+          drawnMarks.push({ p, x, y, d, rear: !s.front, symbol, mark, text, width });
+        }
+        const placed = drawnMarks.filter(m => !m.rear).map(m => pointMarkBox(m.x, m.y, m.width));
+        const rear = drawnMarks.filter(m => m.rear).sort((a, b) => a.d - b.d);
+        const blocks = rear.length ? markBlocks(c.ownerDocument, touch, panel, { left: mx, right: mx + size, top: my, bottom: my + size }) : [];
+        for (const m of rear) {
+          ({ x: m.x, y: m.y } = clearOfAll(m.x, m.y, m.width, blocks, w, edge, placed));
+          placed.push(pointMarkBox(m.x, m.y, m.width));
+        }
+        for (const { p, x, y, symbol, mark, text, width } of drawnMarks) {
           label(text, x, y, pointColor(p.owner, side));
-          boxes.push(pointMarkBox(x, y, width));
           if (mark) drawRing(g, x + (g.measureText(symbol).width - width) / 2, y, mark, pointColor(mark.owner, side));
         }
-        pointMarks.publish(boxes, performance.now());
+        pointMarks.publish(drawnMarks.map(m => pointMarkBox(m.x, m.y, m.width)), performance.now());
         for (const u of world.units) {
           if (!u.alive || u.side !== side || !u.def.move) continue;
           const d = Math.hypot(u.pos.x - me.x, u.pos.z - me.z);
@@ -193,8 +200,6 @@ export function BattleHud({ session, runtime, side, renderer, touch, death, mark
       const inside = marks.inside(runtime.conquest.points, me.x, me.z, world.time);
       if (inside) label(markText(inside), w / 2, markTextY(w, h), pointColor(inside.owner, side));
       shade.current ??= shadeTerrain(world.terrain);
-      const size = touch ? MINIMAP.touch : MINIMAP.desktop;
-      const mx = touch ? 72 : 16, my = touch ? 12 : h - size - 16;
       const cx = mx + size / 2, cy = my + size / 2, r = size / 2;
       const scale = r / (world.avatar.kind === 'soldier' ? MINIMAP_RANGE_FOOT : MINIMAP_RANGE);
       const yaw = world.avatar.kind === 'soldier' && world.soldier ? world.soldier.yaw : world.player.yaw;

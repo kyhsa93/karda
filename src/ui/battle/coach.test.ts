@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cardDevice, Coach, coachDimmed, COACH_STEPS, coachText, controlCard, DEATH_TIPS, deadTip, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
+import { cardDevice, clearOfAll, Coach, coachDimmed, COACH_STEPS, coachText, controlCard, DEATH_TIPS, deadTip, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_PANEL_GAP_PX, MARK_ROW_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
 import { SOLDIER_COMMANDS } from '../../input/roles';
 import type { Command } from '../../input/bindings';
@@ -534,6 +534,61 @@ describe('coach over a point mark (#295)', () => {
     expect(coach).toMatch(/pointer-events: none;/);
     expect(coach).toMatch(/transition: opacity 150ms;/);
     expect(css).toMatch(/\.coach\.dimmed \{ opacity: \.5; \}/);
+  });
+});
+
+describe('edge marks stacked on one side (#315)', () => {
+  const overlap = (a: Box, b: Box, gap = 0) => Math.min(a.right, b.right + gap) - Math.max(a.left, b.left - gap) > 0 && Math.min(a.bottom, b.bottom + gap) - Math.max(a.top, b.top - gap) > 0;
+
+  it('climbs one 18px row, x kept, when only a nearer mark is in the way', () => {
+    const near = pointMarkBox(400, 342, 64);
+    expect(MARK_ROW_PX).toBe(18);
+    expect(clearOfAll(410, 342, 70, [], 844, 48, [near])).toEqual({ x: 410, y: 324 });
+    expect(overlap(near, pointMarkBox(410, 324, 70))).toBe(false);
+  });
+
+  it('keeps a mark where it is when nothing is in the way', () => {
+    expect(clearOfAll(410, 342, 70, [{ left: 0, right: 100, top: 0, bottom: 390 }], 844, 48, [pointMarkBox(600, 342, 64)])).toEqual({ x: 410, y: 342 });
+  });
+
+  it('still slides sideways off a control on its own row before it climbs (#274)', () => {
+    const stick: Box = { left: 360, right: 470, top: 300, bottom: 380 };
+    expect(clearOfAll(410, 342, 70, [stick], 844, 48)).toEqual({ x: 360 - MARK_PANEL_GAP_PX - 35, y: 342 });
+  });
+
+  it('stays on its row when sliding off a control already clears the nearer mark', () => {
+    const stick: Box = { left: 1124, right: 1260, top: 560, bottom: 696 };
+    const front = pointMarkBox(1232, 672, 65);
+    expect(clearOfAll(1150, 672, 66, [stick], 1280, 48, [front])).toEqual({ x: 1124 - MARK_PANEL_GAP_PX - 33, y: 672 });
+  });
+
+  it('slides a stacked mark off a control met on a higher row', () => {
+    const radio: Box = { left: 300, right: 520, top: 300, bottom: 330 };
+    const r = clearOfAll(410, 342, 70, [radio], 844, 48, [pointMarkBox(410, 342, 70)]);
+    expect(r.y).toBe(324);
+    expect(overlap(pointMarkBox(r.x, r.y, 70), radio, MARK_PANEL_GAP_PX)).toBe(false);
+  });
+
+  const WIDEST = 90;
+  const RADIO_1280: Box = { left: 558, right: 722, top: 520, bottom: 550 }, STATUS_1280: Box = { left: 1050, right: 1264, top: 653, bottom: 704 };
+  const RADIO_844: Box = { left: 340, right: 504, top: 190, bottom: 220 }, STATUS_844: Box = { left: 614, right: 828, top: 323, bottom: 374 };
+  const LAYOUTS = [
+    ['1280x720 desktop', 1280, 720, [{ left: 16, right: 196, top: 524, bottom: 704 }, RADIO_1280, STATUS_1280]],
+    ['844x390 desktop', 844, 390, [{ left: 16, right: 196, top: 194, bottom: 374 }, RADIO_844, STATUS_844]],
+  ] as const;
+
+  it.each(LAYOUTS)('fits all seven points stacked on one side at %s on screen, off the minimap, radio and status panel', (_, w, h, blocks) => {
+    for (let x0 = 48; x0 <= w - 48; x0 += 4) {
+      const placed: Box[] = [];
+      for (let k = 0; k < 7; k++) {
+        const r = clearOfAll(x0, h - 48, WIDEST, blocks, w, 48, placed);
+        const m = pointMarkBox(r.x, r.y, WIDEST);
+        expect(m.left >= 0 && m.right <= w && m.top >= 0 && m.bottom <= h).toBe(true);
+        for (const b of blocks) expect(overlap(m, b, MARK_PANEL_GAP_PX)).toBe(false);
+        for (const p of placed) expect(overlap(m, p)).toBe(false);
+        placed.push(m);
+      }
+    }
   });
 });
 
