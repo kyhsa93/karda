@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import harekRaw from '../../content/battle/maps/harek.json?raw';
-import { t } from '../../content/strings';
+import { t, tList } from '../../content/strings';
 import type { SortieRole } from '../../save/save';
 import type { BattleMapDef } from '../../sim/battle/schema';
 import { STEP } from '../../sim/world';
 import { BattleOverlays } from './Battle';
 import { DEFAULT_CHOICE } from './BattleSetup';
-import { PointMarkBoard } from './coach';
+import { cardKey, PointMarkBoard } from './coach';
 import { DeathReport } from './deathReport';
 import { loadBattle } from './loadBattle';
 
@@ -90,14 +90,14 @@ describe('quick sortie (#239)', () => {
     vi.unstubAllGlobals();
   });
 
-  async function mount({ quick, tips, lastRole }: { quick: boolean; tips: readonly string[]; lastRole?: SortieRole }) {
+  async function mount({ quick, tips, lastRole, onTip = noop }: { quick: boolean; tips: readonly string[]; lastRole?: SortieRole; onTip?: (id: string) => void }) {
     const mod = await loadBattle();
     const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: DEFAULT_CHOICE.side, seed: 7 });
     session.start();
     const death = new DeathReport(session);
     const onRole = vi.fn();
     root = createRoot(container as unknown as HTMLElement);
-    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: DEFAULT_CHOICE.side, quick, touch: false, tips, onTip: noop, lastRole, onRole, onAgain: noop, onSetup: noop, onTitle: noop }));
+    root.render(createElement(BattleOverlays, { game: { mod, session, runtime, death, marks: new PointMarkBoard() }, side: DEFAULT_CHOICE.side, quick, touch: false, tips, onTip, lastRole, onRole, onAgain: noop, onSetup: noop, onTitle: noop }));
     await new Promise(done => setTimeout(done, 20));
     const picked = (row: number) => all(all(container, 'setting-row')[row], 'on')[0]?.textContent;
     return { session, onRole, picked };
@@ -140,6 +140,48 @@ describe('quick sortie (#239)', () => {
     expect(g.picked(0)).toBe(t('battle.roles.soldier'));
     expect(g.picked(1)).toBe(t('battle.deploy.spawnRally'));
     expect(g.onRole).not.toHaveBeenCalled();
+  });
+
+  const CLASSES = ['assault', 'engineer', 'support', 'recon'] as const;
+  const card = () => all(container, 'control-card');
+  const pickClass = async (cls: typeof CLASSES[number]) => {
+    press(buttons(all(container, 'setting-row')[2]).find(b => b.textContent === t(`battle.classes.${cls}`))!);
+    await vi.waitFor(() => expect(card()[0].childNodes[0].textContent).toBe(t(`battle.card.${cardKey('soldier', cls)}.title`)));
+  };
+
+  it('switches the control card with the class at once and records nothing until the sortie (#304)', async () => {
+    const onTip = vi.fn();
+    await mount({ quick: false, tips: [], onTip });
+    for (const cls of [...CLASSES, 'assault' as const]) {
+      await pickClass(cls);
+      expect(card()).toHaveLength(1);
+      expect(card()[0].childNodes.slice(1).map(n => n.textContent)).toEqual(tList(`battle.card.${cardKey('soldier', cls)}.keyboard`));
+    }
+    expect(onTip).not.toHaveBeenCalled();
+  });
+
+  it('records card.soldier whichever class goes first, so the quick sortie still skips the card the same way (#304, #311, #338)', async () => {
+    const tips: string[] = [];
+    const g = await mount({ quick: false, tips: [], onTip: id => tips.push(id) });
+    const go = () => buttons(container).find(b => b.attrs.class === 'go')!;
+    for (const [n, cls] of CLASSES.slice(1).entries()) {
+      if (n > 0) {
+        const enemy = g.session.world.units.find(u => u.alive && u.side === 'veros')!;
+        g.session.world.emit({ t: 'playerHit', by: enemy.id, weapon: 'g_rifle', damage: 1000 });
+        while (g.session.mode !== 'deploy' || g.session.deployIn() > 0) g.session.step(STEP);
+      }
+      await pickClass(cls);
+      await vi.waitFor(() => expect(go().textContent).toBe(`${t('battle.deploy.go')} ▶`));
+      press(go());
+      expect(g.session.mode).toBe('play');
+      expect(g.session.world.soldier?.cls).toBe(cls);
+      expect(tips.splice(0)).toEqual(['card.soldier']);
+    }
+    root.unmount();
+    const q = await mount({ quick: true, tips: ['card.soldier'] });
+    expect(q.session.mode).toBe('play');
+    expect(q.session.world.soldier?.cls).toBe('assault');
+    expect(card()).toHaveLength(0);
   });
 
   it('leaves the battle path on the deploy screen with the last role', async () => {

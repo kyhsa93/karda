@@ -1,6 +1,7 @@
 import { t } from '../../content/strings';
 import type { SortieRole } from '../../save/save';
 import type { CrashReason } from '../../sim/events';
+import type { SoldierClass } from '../../sim/infantry/soldier';
 import type { ThreatKind } from '../../sim/weapons/enemyMissile';
 import { sideSymbol } from './hud/symbols';
 
@@ -162,8 +163,16 @@ export function deathTip(reason: CrashReason | undefined, missile: ThreatKind | 
   return reason ? DEATH_TIPS[reason] : 'battle.tips.fire';
 }
 
+export function cardTip(role: SortieRole) {
+  return role === 'heli' ? 'card.apache' : 'card.soldier';
+}
+
 export function controlCard(role: SortieRole, tips: readonly string[]) {
-  return !tips.includes(role === 'heli' ? 'card.apache' : 'card.soldier');
+  return !tips.includes(cardTip(role));
+}
+
+export function cardKey(role: SortieRole, cls: SoldierClass) {
+  return role === 'heli' ? 'apache' : cls === 'assault' ? 'soldier' : cls;
 }
 
 export function deadTip(deaths: number, seen: boolean, card: boolean) {
