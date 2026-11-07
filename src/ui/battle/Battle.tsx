@@ -11,6 +11,7 @@ import { DIFFICULTIES } from '../../sim/difficulty';
 import type { CrashReason } from '../../sim/events';
 import type { FlightSession } from '../../sim/session';
 import { Flight } from '../screens/Flight';
+import { StallNotice } from '../screens/StallNotice';
 import type { BattleChoice } from './BattleSetup';
 import { BattleLoadBoundary, useRaiseInRender } from './BattleLoadBoundary';
 import { loadBattle } from './loadBattle';
@@ -31,8 +32,8 @@ export function clock(sec: number) {
 
 const nextPaint = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())));
 
-export function Battle({ choice, quick = false, touch, settings, onSettings, onSetup, onTitle, tips, onTip, lastRole, onRole }: {
-  choice: BattleChoice; quick?: boolean; touch: boolean; settings: Settings; onSettings: (s: Settings) => void; onSetup: () => void; onTitle: () => void; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void;
+export function Battle({ waitSince, choice, quick = false, touch, settings, onSettings, onSetup, onTitle, tips, onTip, lastRole, onRole }: {
+  waitSince?: number; choice: BattleChoice; quick?: boolean; touch: boolean; settings: Settings; onSettings: (s: Settings) => void; onSetup: () => void; onTitle: () => void; tips: readonly string[]; onTip: (id: string) => void; lastRole?: SortieRole; onRole: (role: SortieRole) => void;
 }) {
   const [game, setGame] = useState<{ mod: BattleModule; session: FlightSession; runtime: Runtime; death: DeathReport; marks: PointMarkBoard } | null>(null);
   const [round, setRound] = useState(0);
@@ -53,7 +54,7 @@ export function Battle({ choice, quick = false, touch, settings, onSettings, onS
     })().catch(error => { if (alive) raise(error); });
     return () => { alive = false; };
   }, [choice, round]);
-  if (!game) return <div className="menu"><div className="card"><p className="sub">{t('battle.deploy.loading')}</p></div></div>;
+  if (!game) return <div className="menu"><div className="card"><p className="sub">{t('battle.deploy.loading')}</p><StallNotice since={round === 0 ? waitSince : undefined} /></div></div>;
   return (
     <BattleLoadBoundary strings="battle.matchError">
       <Flight key={round} session={game.session} touch={touch} settings={settings} onSettings={onSettings} onExit={onSetup} onRenderer={setRenderer}>

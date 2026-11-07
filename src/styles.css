@@ -112,6 +112,7 @@ button.mode:disabled { opacity: .45; cursor: default; }
 .result b { color: #ffd166; }
 .loading .bar { width: 240px; height: 6px; margin: 0 auto; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
 .loading .bar div { height: 100%; background: #ffd166; transition: width .2s; }
+.stall { margin-top: 20px; }
 .credits ul { text-align: left; font-size: 13px; line-height: 1.5; padding-left: 18px; color: #cfd8e3; max-height: 50vh; overflow-y: auto; }
 .credits li { margin-bottom: 6px; }
 .credits small { display: block; color: #8fa0b5; }
