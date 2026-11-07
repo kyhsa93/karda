@@ -21,6 +21,8 @@
 [비행] 중 FARP 착륙 → [FARP 메뉴 (비행 화면 위 패널)]
 ```
 
+일시정지(Esc·Start 메뉴, 세로 안내, GL 컨텍스트 상실) 동안 키보드·패드·터치의 게임 명령은 실행하지 않는다. 통과하는 것은 일시정지·도움말(Esc·Start·H)과 소리(M) 세 명령(`input/bindings.ts` `PAUSE_COMMANDS`)과 메뉴 안 버튼(계속·조작법·설정·경기 포기, 터치 헬기의 시점·엔진)뿐이고, 새 명령은 목록에 넣지 않으면 막힌다(#303).
+
 화면 상태는 React 쪽 `ui/state.ts`의 단일 상태 기계로 관리한다: `{ screen: 'title' | 'campaign' | 'briefing' | 'loadout' | 'flight' | 'debrief' | 'training' | 'instant' | 'settings', missionId?, … }`. URL 해시(`#/campaign`, `#/flight/m03`)와 동기화해 새로고침해도 메뉴 위치를 유지한다(비행 중 새로고침이면 브리핑으로).
 
 ## 7.3 화면별 와이어프레임

@@ -21,7 +21,7 @@ import { hellfireSolution } from '../../sim/weapons/hellfire';
 import { rocketSolution } from '../../sim/weapons/rockets';
 import { CLASS_KITS } from '../../sim/infantry/arms';
 import { gearButtons } from '../battle/hud/soldierStatus';
-import { PREVENT_DEFAULT, type Command } from '../../input/bindings';
+import { PAUSE_COMMANDS, PREVENT_DEFAULT, type Command } from '../../input/bindings';
 import { roleCommand, roleOf, wantsPointerLock } from '../../input/roles';
 import { FlightInput } from '../../input/input';
 import { SettingsPanel } from './SettingsScreen';
@@ -82,6 +82,10 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const [help, setHelp] = useState(false);
   const [muted, setMuted] = useState(false);
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  const halted = (help || contextLost || portrait) && snap.mode === 'play';
+  const haltedRef = useRef(halted);
+  haltedRef.current = halted;
+  const stopped = () => haltedRef.current || session.paused;
 
   const toggleView = () => rendererRef.current?.toggleView();
   const toggleSensor = () => { if (sim.conditions.time !== 'night') sim.tads.sensor = sim.tads.sensor === 'tv' ? 'flir' : 'tv'; };
@@ -91,6 +95,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   const [, setFarpTick] = useState(0);
 
   const runCommand = (cmd: Command) => {
+    if (stopped() && !PAUSE_COMMANDS.has(cmd)) return;
     switch (cmd) {
       case 'engine': sim.toggleEngine(); break;
       case 'weapon1': if (sim.avatar.kind === 'soldier') sim.selectSoldierWeapon(CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary); else sim.selectWeapon(1); break;
@@ -163,8 +168,8 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
   }, [hud]);
 
   useEffect(() => {
-    session.paused = (help || contextLost || portrait) && snap.mode === 'play';
-  }, [session, help, contextLost, portrait, snap.mode]);
+    session.paused = halted;
+  }, [session, halted]);
 
   useEffect(() => {
     if (!contextLost) return;
@@ -312,7 +317,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
     drag.current = null;
     if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 6) rendererRef.current?.clickAt(e.clientX, e.clientY);
   };
-  const press = (fn: () => void) => (e: RPointerEvent) => { e.preventDefault(); e.stopPropagation(); fn(); };
+  const press = (fn: () => void, always = false) => (e: RPointerEvent) => { e.preventDefault(); e.stopPropagation(); if (always || !stopped()) fn(); };
   const stanceTimer = useRef<number | null>(null);
   const stanceHold = () => ({
     onPointerDown: (e: RPointerEvent) => {
@@ -367,7 +372,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
       {touch && snap.mode === 'play' && sim.avatar.kind === 'soldier' && (
         <div className="sticks soldier-controls">
           <VirtualStick className={`stick left size-${settings.controls.touchStickSize}`} radius={STICK_RADIUS[settings.controls.touchStickSize]} label={t('touch.moveStick')} onMove={(x, y) => { input.touch.lx = x; input.touch.ly = y; }} />
-          <button className="tbtn pause" aria-label={t('touch.pause')} onPointerDown={press(() => setHelp(true))}>≡</button>
+          <button className="tbtn pause" aria-label={t('touch.pause')} onPointerDown={press(() => setHelp(true), true)}>≡</button>
           <div className="soldier-gear">
             <button className="tbtn swap" onPointerDown={press(() => runCommand(sim.soldierArms.selected === CLASS_KITS[sim.soldier?.cls ?? 'assault'].primary ? 'weapon2' : 'weapon1'))}>{gear.swap}</button>
             <button className="tbtn" onPointerDown={press(() => runCommand('reload'))}>{t('touch.reload')}</button>
@@ -385,7 +390,7 @@ export function Flight({ session, touch, settings = freshSave().settings, onSett
         <div className="sticks">
           <VirtualStick className={`stick left size-${settings.controls.touchStickSize}`} radius={STICK_RADIUS[settings.controls.touchStickSize]} label={t('touch.leftStick')} onMove={(x, y) => { input.touch.lx = x; input.touch.ly = y; }} />
           <VirtualStick className={`stick right size-${settings.controls.touchStickSize}`} radius={STICK_RADIUS[settings.controls.touchStickSize]} label={t('touch.rightStick')} onMove={(x, y) => { input.touch.rx = x; input.touch.ry = y; }} />
-          <button className="tbtn pause" aria-label={t('touch.pause')} onPointerDown={press(() => setHelp(true))}>≡</button>
+          <button className="tbtn pause" aria-label={t('touch.pause')} onPointerDown={press(() => setHelp(true), true)}>≡</button>
           {(!sim.player.engineOn || sim.player.landed) && <button className="tbtn engine" onPointerDown={press(() => sim.toggleEngine())}>{t('touch.engine')}</button>}
           <div className="tcol">
             <button className={`tbtn${tadsOn ? ' on' : ''}`} onPointerDown={press(() => sim.toggleTads())}>{t('touch.tads')}</button>
