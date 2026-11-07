@@ -11,15 +11,19 @@ import { CoachBox } from '../CoachBox';
 import { DeathReport } from '../deathReport';
 import { loadBattle } from '../loadBattle';
 import { BattleHud, RADIO_SLOT, TOUCH_CONTROLS } from './BattleHud';
+import { BUTTON_TEXT, grow, MARK_CENTER_DIM, MARK_TARGET_DIM, PILL_FILL, PILL_PAD } from './targetMark';
+import { STANDARD_LOADOUT } from '../../../sim/heli/loadout';
 
 vi.mock('../../../assets/loader', () => ({ assets: { loadGroup: async () => ({ loaded: [] }), get: () => null } }));
 
 const W = 844, H = 390;
 
-interface Drawn { arcs: { x: number; y: number; r: number; style: string; width: number; end: number }[]; texts: { text: string; x: number; y: number; style: string }[] }
+interface Drawn { arcs: { x: number; y: number; r: number; style: string; width: number; end: number }[]; texts: { text: string; x: number; y: number; style: string; alpha: number }[]; pills: (Box & { style: string })[]; lines: number; calls: number }
+
+const newDrawn = (): Drawn => ({ arcs: [], texts: [], pills: [], lines: 0, calls: 0 });
 
 function fakeContext(drawn: Drawn) {
-  const state: Record<string, unknown> = {};
+  const state: Record<string, unknown> = { globalAlpha: 1 };
   let path: { x: number; y: number; r: number; end: number } | null = null;
   const fns: Record<string, (...a: never[]) => unknown> = {
     measureText: (text: string) => ({ width: text.length * 7 }),
@@ -27,16 +31,21 @@ function fakeContext(drawn: Drawn) {
     beginPath: () => { path = null; },
     arc: (x: number, y: number, r: number, _s: number, end: number) => { path = { x, y, r, end }; },
     stroke: () => { if (path) drawn.arcs.push({ ...path, style: String(state.strokeStyle), width: Number(state.lineWidth) }); },
-    fillText: (text: string, x: number, y: number) => { drawn.texts.push({ text, x, y, style: String(state.fillStyle) }); },
-    clearRect: () => { drawn.arcs.length = 0; drawn.texts.length = 0; },
+    lineTo: () => { drawn.lines++; },
+    roundRect: (x: number, y: number, w: number, h: number) => { drawn.pills.push({ left: x, top: y, right: x + w, bottom: y + h, style: String(state.fillStyle) }); },
+    fillText: (text: string, x: number, y: number) => { drawn.texts.push({ text, x, y, style: String(state.fillStyle), alpha: Number(state.globalAlpha) }); },
+    clearRect: () => { drawn.arcs.length = 0; drawn.texts.length = 0; drawn.pills.length = 0; drawn.lines = 0; },
   };
-  return new Proxy(state, { get: (s, k: string) => fns[k] ?? (k in s ? s[k] : () => {}), set: (s, k: string, v) => { s[k] = v; return true; } });
+  return new Proxy(state, {
+    get: (s, k: string) => { const f = fns[k] ?? (k in s ? null : () => {}); return f ? (...a: never[]) => { drawn.calls++; return f(...a); } : s[k]; },
+    set: (s, k: string, v) => { s[k] = v; return true; },
+  });
 }
 
 class FakeNode {
   childNodes: FakeNode[] = [];
   parentNode: FakeNode | null = null;
-  style = { setProperty() {} };
+  style: Record<string, unknown> = { setProperty() {} };
   attrs: Record<string, string> = {};
   namespaceURI = 'http://www.w3.org/1999/xhtml';
   clientWidth = W;
@@ -44,7 +53,7 @@ class FakeNode {
   width = 0;
   height = 0;
   context: unknown = null;
-  constructor(public nodeType: number, public nodeName: string, public ownerDocument: { drawn: Drawn } | null, public nodeValue = '') {}
+  constructor(public nodeType: number, public nodeName: string, public ownerDocument: { drawn: Drawn; top: Drawn } | null, public nodeValue = '') {}
   get tagName() { return this.nodeName; }
   get firstChild(): FakeNode | null { return this.childNodes[0] ?? null; }
   get lastChild(): FakeNode | null { return this.childNodes.at(-1) ?? null; }
@@ -71,7 +80,7 @@ class FakeNode {
   addEventListener() {}
   removeEventListener() {}
   getBoundingClientRect() { return { left: 290, right: 480, top: 116, bottom: 160 }; }
-  getContext() { return this.context ??= this.attrs.class === 'battle-canvas' ? fakeContext(this.ownerDocument!.drawn) : fakeContext({ arcs: [], texts: [] }); }
+  getContext() { return this.context ??= this.attrs.class === 'battle-canvas' ? fakeContext(this.ownerDocument!.drawn) : this.attrs.class === 'battle-top' ? fakeContext(this.ownerDocument!.top) : fakeContext(newDrawn()); }
 }
 
 const harek = JSON.parse(harekRaw) as BattleMapDef;
@@ -81,13 +90,19 @@ describe('capture mark in the HUD frame (#228)', () => {
   let root: Root;
   let frame: () => void;
   let drawn: Drawn;
+  let top: Drawn;
+  let topCanvas: () => FakeNode | undefined;
 
   beforeEach(() => {
-    drawn = { arcs: [], texts: [] };
+    drawn = newDrawn();
+    top = newDrawn();
     const doc = new FakeNode(9, '#document', null) as FakeNode & Record<string, unknown>;
     doc.drawn = drawn;
-    doc.createElement = (type: string) => new FakeNode(1, type.toUpperCase(), doc as unknown as { drawn: Drawn });
-    doc.createTextNode = (text: string) => new FakeNode(3, '#text', doc as unknown as { drawn: Drawn }, text);
+    doc.top = top;
+    const made: FakeNode[] = [];
+    topCanvas = () => made.find(n => n.attrs.class === 'battle-top' && n.parentNode);
+    doc.createElement = (type: string) => { const n = new FakeNode(1, type.toUpperCase(), doc as unknown as { drawn: Drawn; top: Drawn }); made.push(n); return n; };
+    doc.createTextNode = (text: string) => new FakeNode(3, '#text', doc as unknown as { drawn: Drawn; top: Drawn }, text);
     doc.documentElement = (doc.createElement as (t: string) => FakeNode)('html');
     doc.body = (doc.createElement as (t: string) => FakeNode)('body');
     const win = { document: doc, location: { hash: '', search: '' }, HTMLIFrameElement: class {}, devicePixelRatio: 1, addEventListener() {}, removeEventListener() {} };
@@ -108,11 +123,12 @@ describe('capture mark in the HUD frame (#228)', () => {
   const COACH = { left: 290, right: 480, top: 116, bottom: 160 };
   const newNode = () => (document as unknown as { createElement: (t: string) => FakeNode }).createElement('div');
 
-  async function game({ withCamera = true, marks = new PointMarkBoard(), touch = true, away = false } = {}) {
+  async function game({ withCamera = true, marks = new PointMarkBoard(), touch = true, away = false, heli = false } = {}) {
     const mod = await loadBattle();
     const { session, runtime } = mod.createBattleSession(harek, 'quick', { side: 'coalition', seed: 1 });
     session.start();
-    session.deploy(SOLDIER);
+    const pad = session.world.pads[0];
+    session.deploy(heli ? { kind: 'heli', at: 'air', x: pad.x, z: pad.z, agl: 150, headingDeg: 0, kit: STANDARD_LOADOUT, speed: 0 } : SOLDIER);
     const world = session.world;
     const p = runtime.conquest.points.find(q => q.owner === 'neutral')!;
     const camera = new THREE.PerspectiveCamera(70, W / H, 1, 5000);
@@ -396,10 +412,175 @@ describe('capture mark in the HUD frame (#228)', () => {
       controlsAt([{ left: 0, right: W, top: 0, bottom: H }]);
       const { p } = await game();
       frame();
-      const m = rear(p.id);
+      expect(rear(p.id)).toEqual([]);
+      const m = top.texts.filter(x => POINT_MARK.test(x.text) && x.text.includes(` ${p.id} `));
       expect(m).toHaveLength(1);
       expect(m[0].x).toBeCloseTo(W / 2, 0);
       expect(m[0].y).toBeCloseTo(H / 2, 0);
+    });
+  });
+
+  describe('target mark over the controls (#340)', () => {
+    const named = (d: Drawn, id: string) => d.texts.filter(x => POINT_MARK.test(x.text) && x.text.includes(` ${id} `));
+    const boxOf = (x: { x: number; y: number; text: string }) => pointMarkBox(x.x, x.y, x.text.length * 7);
+    const visible = () => topCanvas()?.style.visibility;
+    function dom(controls: Box[], texts: Box[] = [], radio: Box[] = []) {
+      const asked: string[] = [];
+      const d = document as unknown as Record<string, unknown>;
+      d.querySelectorAll = (sel: string) => {
+        asked.push(sel);
+        if (sel === BUTTON_TEXT) return texts.map(r => ({ childNodes: [{ nodeType: 3, textContent: '발사', rect: r }] }));
+        if (sel === RADIO_SLOT) return radio.map(b => ({ getBoundingClientRect: () => b }));
+        return sel === TOUCH_CONTROLS ? controls.map(b => ({ getBoundingClientRect: () => b })) : [];
+      };
+      d.createRange = () => { let n: { rect: Box } | null = null; return { selectNodeContents: (x: { rect: Box }) => { n = x; }, getClientRects: () => (n ? [n.rect] : []) }; };
+      return asked;
+    }
+    async function aside(opts: { touch?: boolean; heli?: boolean; marks?: PointMarkBoard } = {}) {
+      const g = await game(opts);
+      const me = g.world.playerBody().pos;
+      const id = nearestOpenPoint(g.runtime.conquest.points, 'coalition', me.x, me.z)!;
+      const q = g.runtime.conquest.points.find(o => o.id === id)!;
+      for (const o of g.runtime.conquest.points) if (o !== q) { o.x = q.x + 3000; o.z = q.z; }
+      const y = g.world.terrain.surfaceAt(q.x, q.z) + 16;
+      g.camera.position.set(q.x, y, q.z + 200);
+      g.camera.lookAt(q.x + 60, y, q.z);
+      return { ...g, q };
+    }
+
+    it('draws only the target on the top layer with the wide pill when it sits on a touch control, and publishes it', async () => {
+      const marks = new PointMarkBoard();
+      dom([{ left: 0, right: W, top: 0, bottom: H }]);
+      const { q } = await aside({ marks });
+      frame();
+      expect(named(drawn, q.id)).toEqual([]);
+      const [m] = named(top, q.id);
+      expect(m.x).toBeLessThan(W / 2 - 60);
+      expect(m.alpha).toBe(1);
+      expect(top.pills).toEqual([{ ...grow(boxOf(m), PILL_PAD.x, PILL_PAD.y), style: PILL_FILL }]);
+      expect(top.texts.filter(x => POINT_MARK.test(x.text))).toHaveLength(1);
+      expect(top.lines).toBe(0);
+      expect(visible()).toBe('visible');
+      expect(marks.boxes).toContainEqual(boxOf(m));
+    });
+
+    it('makes no top-layer call while the target touches nothing, and clears it once when the overlap ends', async () => {
+      dom([]);
+      await aside();
+      frame();
+      frame();
+      expect(top.calls).toBe(0);
+      expect(visible()).not.toBe('visible');
+      dom([{ left: 0, right: W, top: 0, bottom: H }]);
+      frame();
+      expect(top.calls).toBeGreaterThan(0);
+      expect(visible()).toBe('visible');
+      dom([]);
+      frame();
+      const cleared = top.calls;
+      expect(top.texts).toEqual([]);
+      expect(visible()).toBe('hidden');
+      frame();
+      frame();
+      expect(top.calls).toBe(cleared);
+    });
+
+    it('lifts the target a row off a button text, keeps x, and publishes where it went', async () => {
+      const marks = new PointMarkBoard();
+      dom([{ left: 0, right: W, top: 0, bottom: H }], []);
+      const { q } = await aside({ marks });
+      frame();
+      const [m0] = named(top, q.id);
+      dom([{ left: 0, right: W, top: 0, bottom: H }], [{ left: m0.x - 10, right: m0.x + 10, top: m0.y - 6, bottom: m0.y + 6 }]);
+      frame();
+      const [m] = named(top, q.id);
+      expect(m.x).toBe(m0.x);
+      expect(m.y).toBe(m0.y - MARK_ROW_PX);
+      expect(top.pills).toHaveLength(1);
+      expect(marks.boxes).toContainEqual(boxOf(m));
+      expect(marks.boxes).not.toContainEqual(boxOf(m0));
+    });
+
+    it('draws the target above the controls without a pill when no row is free (step 4)', async () => {
+      const full = [{ left: 0, right: W, top: 0, bottom: H }];
+      dom(full);
+      const { q } = await aside();
+      frame();
+      const [m0] = named(top, q.id);
+      const text = (dy: number) => ({ left: m0.x - 10, right: m0.x + 10, top: m0.y + dy - 6, bottom: m0.y + dy + 6 });
+      dom(full, [text(0), text(-MARK_ROW_PX), text(-2 * MARK_ROW_PX), text(MARK_ROW_PX)]);
+      frame();
+      const [m] = named(top, q.id);
+      expect(m.x).toBe(m0.x);
+      expect(m.y).toBe(m0.y + MARK_ROW_PX);
+      expect(top.pills).toEqual([]);
+      expect(named(drawn, q.id)).toEqual([]);
+    });
+
+    it('puts the desktop target above the radio slot with a pill', async () => {
+      const asked = dom([], [], [{ left: 0, right: W, top: 0, bottom: H }]);
+      const { q } = await aside({ touch: false });
+      frame();
+      expect(asked).not.toContain(TOUCH_CONTROLS);
+      expect(named(top, q.id)).toHaveLength(1);
+      expect(top.pills).toHaveLength(1);
+    });
+
+    it('dims the target to the target value in the center, other marks to the general value, and redraws the soldier crosshair above a top-layer target and its pill', async () => {
+      dom([]);
+      const { p, runtime, camera, world } = await game();
+      frame();
+      expect(named(drawn, p.id).map(x => x.alpha)).toEqual([MARK_TARGET_DIM]);
+      const own = runtime.conquest.points.find(o => o.owner === 'coalition')!;
+      const y = world.terrain.surfaceAt(own.x, own.z) + 16;
+      camera.position.set(own.x, y, own.z + 200);
+      camera.lookAt(own.x, y, own.z);
+      frame();
+      expect(named(drawn, own.id).map(x => x.alpha)).toEqual([MARK_CENTER_DIM]);
+      expect(top.calls).toBe(0);
+      camera.position.set(p.x, y, p.z + 200);
+      camera.lookAt(p.x, world.terrain.surfaceAt(p.x, p.z) + 16, p.z);
+      dom([{ left: 0, right: W, top: 0, bottom: H }]);
+      world.emit({ t: 'unitHit', unit: 0 });
+      world.events.flush();
+      frame();
+      const [m] = named(top, p.id);
+      expect(m.alpha).toBe(MARK_TARGET_DIM);
+      expect(top.pills).toEqual([{ ...grow(boxOf(m), PILL_PAD.x, PILL_PAD.y), style: PILL_FILL }]);
+      expect(top.lines).toBe(8);
+      expect(drawn.lines).toBeGreaterThanOrEqual(8);
+    });
+
+    it('draws a helicopter target in the center without a pill and without a crosshair', async () => {
+      dom([{ left: 0, right: W, top: 0, bottom: H }]);
+      const { q, camera, world } = await aside({ heli: true });
+      const y = world.terrain.surfaceAt(q.x, q.z) + 16;
+      camera.lookAt(q.x, y, q.z);
+      frame();
+      const [m] = named(top, q.id);
+      expect(m.alpha).toBe(MARK_TARGET_DIM);
+      expect(top.pills).toEqual([]);
+      expect(top.lines).toBe(0);
+    });
+
+    it('lifts the target off another front mark on desktop and leaves the other mark where it was', async () => {
+      dom([]);
+      const { q, runtime, camera, world } = await aside({ touch: false });
+      frame();
+      const [m0] = named(drawn, q.id);
+      const other = runtime.conquest.points.find(o => o !== q)!;
+      other.x = q.x + 20; other.z = q.z;
+      frame();
+      const o = named(drawn, other.id)[0];
+      const [m] = named(drawn, q.id);
+      expect(m.x).toBe(m0.x);
+      expect(m.y).toBe(m0.y - MARK_ROW_PX);
+      const s = new THREE.Vector3(other.x, world.terrain.surfaceAt(other.x, other.z) + 16, other.z).project(camera);
+      expect(o.x).toBeCloseTo((s.x + 1) / 2 * W, 3);
+      expect(o.y).toBeCloseTo((1 - s.y) / 2 * H, 3);
+      const a = boxOf(m), b = boxOf(o);
+      expect(Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0).toBe(false);
+      expect(top.calls).toBe(0);
     });
   });
 });
