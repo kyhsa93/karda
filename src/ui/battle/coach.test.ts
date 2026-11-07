@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cardDevice, clearOfAll, Coach, coachDimmed, COACH_STEPS, coachText, controlCard, DEATH_TIPS, deadTip, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_PANEL_GAP_PX, MARK_ROW_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
+import { cardDevice, cardKey, clearOfAll, Coach, coachDimmed, COACH_STEPS, coachText, controlCard, DEATH_TIPS, deadTip, deathTip, inCapturablePoint, initialRole, MARK_OVERLAP_MIN_PX, MARK_PANEL_GAP_PX, MARK_ROW_PX, MARK_STALE_MS, MIN_SHOW, nearestOpenPoint, pointMarkBox, PointMarkBoard, STEP_TIMEOUT, WALK_STEP, type Box, type CoachFacts } from './coach';
 import { hasString, t, tList } from '../../content/strings';
-import { SOLDIER_COMMANDS } from '../../input/roles';
+import { SOLDIER_COMMANDS, SOLDIER_KEYS } from '../../input/roles';
+import { CLASS_KITS } from '../../sim/infantry/arms';
+import { gearButtons } from './hud/soldierStatus';
+import type { World } from '../../sim/world';
 import type { Command } from '../../input/bindings';
 import harek from '../../content/battle/maps/harek.json';
 import strings from '../../content/strings.ko.json';
@@ -402,6 +405,147 @@ describe('soldier control card names the gear (#208)', () => {
         else if (commands.length) expect(onCard.has(i), `button ${i} ${commands}`).toBe(true);
       }
     });
+  });
+});
+
+describe('control card follows the class (#304)', () => {
+  const CLASSES = ['assault', 'engineer', 'support', 'recon'] as const;
+  type Cls = typeof CLASSES[number];
+  const DEVICES = ['keyboard', 'touch', 'pad'] as const;
+  const TITLES: Record<Cls, string> = { assault: '돌격병 조작', engineer: '공병 조작', support: '지원병 조작', recon: '정찰병 조작' };
+  const GEAR_NAME: Record<string, string> = {
+    grenade: t('touch.toGrenade'), at_rocket: t('touch.toRocket'),
+    medkit: t('touch.medkit'), smoke: t('touch.smoke'), repair: t('touch.repair'), mine: t('touch.mine'),
+  };
+  const HOLD = '누른 채 ';
+  const HELD_TOOLS = new Set(['repair']);
+  const lines = (cls: Cls, device: string) => tList(`battle.card.${cardKey('soldier', cls)}.${device}`);
+  const items = (cls: Cls, device: string) => lines(cls, device).flatMap(l => l.split(' · '));
+  const kit = (cls: Cls) => CLASS_KITS[cls];
+  const carried = (cls: Cls) => [...kit(cls).gear, ...kit(cls).tools] as string[];
+  const gearItem = (id: string) => `${HELD_TOOLS.has(id) ? HOLD : ''}${GEAR_NAME[id]}`;
+  const pressedLabels = (cls: Cls): Record<string, Command> => ({
+    '앉기': 'crouch', '엎드리기': 'prone', '재장전': 'reload', '적 표시': 'spot',
+    ...(kit(cls).gear.length ? { [t(`battle.hud.weapon.${kit(cls).primary}`)]: 'weapon1', [GEAR_NAME[kit(cls).gear[0]]]: 'weapon2' } : {}),
+    ...Object.fromEntries(kit(cls).tools.filter(id => !HELD_TOOLS.has(id)).map(id => [GEAR_NAME[id], id as Command])),
+  });
+  const heldTools = (cls: Cls) => kit(cls).tools.filter(id => HELD_TOOLS.has(id)).map(id => GEAR_NAME[id]);
+
+  const worlds = new Map<Cls, World>();
+  async function soldier(cls: Cls) {
+    const { World } = await import('../../sim/world');
+    if (!worlds.has(cls)) {
+      const w = new World({ seed: 3 });
+      w.active = true;
+      w.spawnAvatar({ kind: 'soldier', x: 0, z: 0, headingDeg: 0, cls });
+      worlds.set(cls, w);
+    }
+    return worlds.get(cls)!;
+  }
+
+  it('titles the card with the class and leaves the helicopter card alone', () => {
+    for (const cls of CLASSES) {
+      expect(t(`battle.card.${cardKey('soldier', cls)}.title`)).toBe(TITLES[cls]);
+      expect(cardKey('heli', cls)).toBe('apache');
+    }
+    expect(cardKey('soldier', 'assault')).toBe('soldier');
+  });
+
+  it('keeps three lines on every device, with the movement and look lines the same for every class', () => {
+    for (const cls of CLASSES) for (const d of DEVICES) {
+      expect(lines(cls, d), `${cls} ${d}`).toHaveLength(3);
+      expect(lines(cls, d).slice(0, 2), `${cls} ${d}`).toEqual(lines('assault', d).slice(0, 2));
+    }
+  });
+
+  it('names the gear the class carries and none it does not, for 4 classes × 3 inputs', () => {
+    for (const cls of CLASSES) for (const d of DEVICES) {
+      const text = lines(cls, d).join(' · '), on = items(cls, d);
+      for (const id of carried(cls)) expect(on.some(i => i === gearItem(id) || i.endsWith(` ${gearItem(id)}`)), `${cls} ${d} ${id}`).toBe(true);
+      for (const id of Object.keys(GEAR_NAME).filter(id => !carried(cls).includes(id))) expect(text, `${cls} ${d} ${id}`).not.toContain(GEAR_NAME[id]);
+      if (d !== 'touch') expect(on.some(i => i.endsWith(` ${t(`battle.hud.weapon.${kit(cls).primary}`)}`)), `${cls} ${d} primary`).toBe(kit(cls).gear.length > 0);
+    }
+  });
+
+  it('prints every keyboard key the way SOLDIER_COMMANDS and SOLDIER_KEYS bind it, for every class', () => {
+    for (const cls of CLASSES) {
+      const printed = items(cls, 'keyboard').flatMap(i => /^\S /.test(i) ? [[i[0], i.slice(2)]] : []);
+      const pressed = printed.filter(([, label]) => !label.startsWith(HOLD)), held = printed.filter(([, label]) => label.startsWith(HOLD));
+      expect(pressed.map(([, label]) => label).sort(), cls).toEqual(Object.keys(pressedLabels(cls)).sort());
+      expect(held.map(([, label]) => label.slice(HOLD.length)), cls).toEqual(heldTools(cls));
+      for (const [key, label] of pressed) expect(SOLDIER_COMMANDS[`${/\d/.test(key) ? 'Digit' : 'Key'}${key}`], `${cls} ${key} ${label}`).toBe(pressedLabels(cls)[label]);
+      for (const [key] of held) expect(SOLDIER_KEYS.repair as readonly string[], `${cls} ${key}`).toContain(`Key${key}`);
+    }
+  });
+
+  describe('pad card matches the pad bindings of each class (#302)', () => {
+    const PAD_BUTTONS: Readonly<Record<string, number>> = { A: 0, B: 1, X: 2, LB: 4, RB: 5, LT: 6, RT: 7, L3: 10, '십자 ↑': 12, '←': 14, '→': 15 };
+    const PAD_HELD: Readonly<Record<string, 'sprint' | 'jump' | 'fire' | 'ads' | 'repair'>> = { '질주': 'sprint', '넘기': 'jump', '사격': 'fire', '조준': 'ads', [`${HOLD}${t('touch.repair')}`]: 'repair' };
+    const printed = (cls: Cls) => items(cls, 'pad').filter(i => !i.includes('스틱')).map(i => {
+      const [, key, label] = /^(십자 \S+|\S+) (.+)$/.exec(i) ?? [];
+      return [key, label] as const;
+    });
+
+    async function press(cls: Cls, button: number) {
+      const w = await soldier(cls);
+      const { FlightInput } = await import('../../input/input');
+      const input = new FlightInput();
+      const commands: Command[] = [];
+      input.onCommand = c => commands.push(c);
+      input.gamepads = () => [{ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === button })) }];
+      input.update(w, 0.05);
+      const switches = Object.keys(w.soldierArms.ammo).length > 1;
+      return { commands: commands.filter(c => switches || (c !== 'weapon1' && c !== 'weapon2')), soldier: w.soldierCommands };
+    }
+
+    it('does what each printed pad item says, and prints no tool the class lacks', async () => {
+      for (const cls of CLASSES) {
+        const labels = printed(cls).map(([, label]) => label);
+        expect(labels.filter(l => !PAD_HELD[l]).sort(), cls).toEqual(Object.keys(pressedLabels(cls)).filter(l => l !== '엎드리기').sort());
+        expect(labels.filter(l => l.startsWith(HOLD)).map(l => l.slice(HOLD.length)), cls).toEqual(heldTools(cls));
+        for (const [key, label] of printed(cls)) {
+          const button = PAD_BUTTONS[key];
+          expect(button, `${cls} ${key}`).toBeTypeOf('number');
+          const { commands, soldier: s } = await press(cls, button);
+          if (PAD_HELD[label]) expect(s[PAD_HELD[label]], `${cls} ${key} ${label}`).toBe(true);
+          else expect(commands, `${cls} ${key} ${label}`).toEqual([pressedLabels(cls)[label]]);
+        }
+      }
+    });
+
+    it('prints every pad button that does something for the class, except pause and the unused enter', async () => {
+      for (const cls of CLASSES) {
+        const onCard = new Set(printed(cls).map(([key]) => PAD_BUTTONS[key]));
+        for (let i = 0; i < 17; i++) {
+          const { commands, soldier: s } = await press(cls, i);
+          const acts = commands.length > 0 || Object.values(PAD_HELD).some(f => s[f]);
+          if (i === 3) expect(commands).toEqual(['enter']);
+          else if (i === 9) expect(commands).toEqual(['pause']);
+          else expect(onCard.has(i), `${cls} button ${i} ${commands}`).toBe(acts);
+        }
+      }
+    });
+  });
+
+  it('names the touch gear buttons as they are labelled and drawn for each class (#233)', async () => {
+    for (const cls of CLASSES) {
+      const w = await soldier(cls), b = gearButtons(w), switches = Object.keys(w.soldierArms.ammo).length > 1;
+      const drawn = [
+        ...(switches ? [b.swap.replace(/ \d+$/, '')] : []),
+        t('touch.reload'),
+        ...(b.medkit ? [t('touch.medkit')] : []),
+        ...(b.repair ? [`${HOLD}${t('touch.repair')}`] : []),
+        ...(b.mine ? [t('touch.mine')] : []),
+        ...(b.smoke ? [t('touch.smoke')] : []),
+      ];
+      for (const name of drawn.filter(n => n !== t('touch.reload'))) {
+        const label = [b.swap, b.medkit, b.repair, b.mine, b.smoke].find(l => l?.startsWith(name.replace(HOLD, '')));
+        expect(label, `${cls} ${name}`).toBeTruthy();
+      }
+      const third = lines(cls, 'touch')[2].split(' · ');
+      expect(third.slice(0, 2), cls).toEqual(lines('assault', 'touch')[2].split(' · ').slice(0, 2));
+      expect(third.slice(2), cls).toEqual(drawn);
+    }
   });
 });
 

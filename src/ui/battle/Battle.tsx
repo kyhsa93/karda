@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { assets } from '../../assets/loader';
 import { HELI_GROUP } from '../../assets/manifest';
 import { t, tList } from '../../content/strings';
-import { cardDevice, Coach, coachText, controlCard, deadTip, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, PointMarkBoard, type CoachFacts } from './coach';
+import { cardDevice, cardKey, cardTip, Coach, coachText, controlCard, deadTip, deathTip, inCapturablePoint, initialRole, nearestOpenPoint, PointMarkBoard, type CoachFacts } from './coach';
 import { CoachBox } from './CoachBox';
 import { DeathReport } from './deathReport';
 import { lostTickets, lostText } from './tickets';
@@ -168,13 +168,13 @@ export function BattleOverlays({ game, side, quick = false, touch, tips, onTip, 
           )}
           {card && (
             <div className="control-card">
-              <b>{t(`battle.card.${role === 'heli' ? 'apache' : 'soldier'}.title`)}</b>
-              {tList(`battle.card.${role === 'heli' ? 'apache' : 'soldier'}.${cardDevice(touch, typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [])}`).map(l => <span key={l}>{l}</span>)}
+              <b>{t(`battle.card.${cardKey(role, cls)}.title`)}</b>
+              {tList(`battle.card.${cardKey(role, cls)}.${cardDevice(touch, typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [])}`).map(l => <span key={l}>{l}</span>)}
             </div>
           )}
           <div className="pause-buttons">
             <button className="go secondary" onClick={onSetup}>{t('battle.deploy.quit')}</button>
-            <button className="go" disabled={wait > 0} onClick={() => { if (chosen && session.deploy(runtime.spawnFor(chosen, mod.KITS[kit], cls))) { onRole(role); if (card) onTip(role === 'heli' ? 'card.apache' : 'card.soldier'); if (respawnTip) onTip('rules.dead'); } }}>
+            <button className="go" disabled={wait > 0} onClick={() => { if (chosen && session.deploy(runtime.spawnFor(chosen, mod.KITS[kit], cls))) { onRole(role); if (card) onTip(cardTip(role)); if (respawnTip) onTip('rules.dead'); } }}>
               {wait > 0 ? t('battle.deploy.wait', { s: Math.ceil(wait) }) : `${t('battle.deploy.go')} ▶`}
             </button>
           </div>
