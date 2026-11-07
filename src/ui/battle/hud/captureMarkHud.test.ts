@@ -6,11 +6,11 @@ import harekRaw from '../../../content/battle/maps/harek.json?raw';
 import type { FlightRenderer } from '../../../render/renderer';
 import type { BattleMapDef } from '../../../sim/battle/schema';
 import { STEP } from '../../../sim/world';
-import { coachDimmed, MARK_PANEL_GAP_PX, nearestOpenPoint, MARK_STALE_MS, pointMarkBox, PointMarkBoard, type Box } from '../coach';
+import { coachDimmed, MARK_PANEL_GAP_PX, MARK_ROW_PX, nearestOpenPoint, MARK_STALE_MS, pointMarkBox, PointMarkBoard, type Box } from '../coach';
 import { CoachBox } from '../CoachBox';
 import { DeathReport } from '../deathReport';
 import { loadBattle } from '../loadBattle';
-import { BattleHud, TOUCH_CONTROLS } from './BattleHud';
+import { BattleHud, RADIO_SLOT, TOUCH_CONTROLS } from './BattleHud';
 
 vi.mock('../../../assets/loader', () => ({ assets: { loadGroup: async () => ({ loaded: [] }), get: () => null } }));
 
@@ -312,15 +312,84 @@ describe('capture mark in the HUD frame (#228)', () => {
       expect(ids().filter(behind).sort()).toEqual([...rearIds].sort());
     });
 
-    it('leaves the desktop rear mark where it was and never asks for touch controls', async () => {
-      const asked = controlsAt([{ left: 0, right: W, top: 0, bottom: H }]);
+    it('leaves the desktop rear mark where it was and asks only for the radio slot, never the touch controls', async () => {
+      const asked: string[] = [];
+      (document as unknown as { querySelectorAll: (s: string) => unknown[] }).querySelectorAll = (sel: string) => { asked.push(sel); return sel === TOUCH_CONTROLS ? [{ getBoundingClientRect: () => ({ left: 0, right: W, top: 0, bottom: H }) }] : []; };
       const { p } = await game({ away: true, touch: false });
       frame();
-      expect(asked).toEqual([]);
+      expect(new Set(asked)).toEqual(new Set([RADIO_SLOT]));
       const m = rear(p.id);
       expect(m).toHaveLength(1);
       expect(m[0].y).toBe(H - 48);
       expect(m[0].x).toBeCloseTo(W / 2, 0);
+    });
+
+    describe('edge marks on the same side (#315)', () => {
+      const pointMarks = () => drawn.texts.filter(x => POINT_MARK.test(x.text)).map(x => ({ ...x, id: x.text.match(/ ([A-Z]) /)![1], box: pointMarkBox(x.x, x.y, x.text.length * 7) }));
+      const overlap = (a: Box, b: Box) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0;
+      const noPairOverlaps = (boxes: Box[]) => { for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(overlap(boxes[i], boxes[j])).toBe(false); };
+
+      async function allBehind(opts: { touch: boolean; marks?: PointMarkBoard }) {
+        const g = await game({ ...opts, away: true });
+        g.runtime.conquest.points.forEach((q, k) => { q.x = g.p.x; q.z = g.p.z + 150 - 120 * k; });
+        return g;
+      }
+
+      it('keeps the nearest rear mark on the bottom edge and stacks the others 18px up on desktop', async () => {
+        controlsAt([]);
+        const marks = new PointMarkBoard();
+        const { runtime, world } = await allBehind({ touch: false, marks });
+        frame();
+        const me = world.playerBody().pos;
+        const order = [...runtime.conquest.points].sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z)).map(q => q.id);
+        const m = pointMarks();
+        expect(m.map(x => x.id).sort()).toEqual([...order].sort());
+        expect(order.map(id => m.find(x => x.id === id)!.y)).toEqual(order.map((_, k) => H - 48 - k * MARK_ROW_PX));
+        for (const x of m) expect(x.x).toBeCloseTo(W / 2, 0);
+        noPairOverlaps(m.map(x => x.box));
+        expect(marks.boxes).toEqual(m.map(x => x.box));
+        const top = m.find(x => x.id === order.at(-1))!;
+        expect(coachDimmed({ left: top.x - 40, right: top.x + 40, top: top.y - 10, bottom: top.y + 10 }, marks, performance.now())).toBe(true);
+      });
+
+      it('slides a stacked desktop mark off the radio slot instead of under it', async () => {
+        const radio: Box = { left: W / 2 - 120, right: W / 2 + 120, top: H - 48 - 30, bottom: H - 48 - 12 };
+        const asked: string[] = [];
+        (document as unknown as { querySelectorAll: (s: string) => unknown[] }).querySelectorAll = (sel: string) => { asked.push(sel); return sel === RADIO_SLOT ? [{ getBoundingClientRect: () => radio }] : []; };
+        const marks = new PointMarkBoard();
+        await allBehind({ touch: false, marks });
+        frame();
+        expect(new Set(asked)).toEqual(new Set([RADIO_SLOT]));
+        const m = pointMarks();
+        expect(m.length).toBe(3);
+        for (const x of m) expect(gapHit(x.box, radio)).toBe(false);
+        for (const x of m) expect(x.box.left >= 0 && x.box.right <= W && x.box.top >= 0 && x.box.bottom <= H).toBe(true);
+        noPairOverlaps(m.map(x => x.box));
+        expect(marks.boxes).toEqual(m.map(x => x.box));
+      });
+
+      it('lifts the touch rear mark off a front mark pinned to the same bottom edge, and the front mark stays', async () => {
+        controlsAt([]);
+        const marks = new PointMarkBoard();
+        const { runtime, p, camera, world } = await game({ marks, away: true });
+        const front = runtime.conquest.points.find(q => q.owner === 'coalition')!;
+        const far = runtime.conquest.points.find(q => q.owner === 'veros')!;
+        front.x = p.x; front.z = p.z + 260;
+        far.x = p.x; far.z = p.z - 4000;
+        const y = world.terrain.surfaceAt(p.x, p.z) + 16 + 400;
+        camera.position.set(p.x, y, p.z + 200);
+        camera.lookAt(p.x, y, p.z + 400);
+        frame();
+        const m = pointMarks();
+        const f = m.find(x => x.id === front.id)!, r = m.find(x => x.id === p.id)!;
+        expect(m.map(x => x.id).sort()).toEqual([front.id, p.id].sort());
+        expect(f.y).toBe(H - 48);
+        expect(f.x).toBeCloseTo(W / 2, 0);
+        expect(r.y).toBe(H - 48 - MARK_ROW_PX);
+        expect(r.x).toBeCloseTo(W / 2, 0);
+        expect(overlap(f.box, r.box)).toBe(false);
+        expect(marks.boxes).toEqual(m.map(x => x.box));
+      });
     });
 
     it('keeps the front marks where they were on touch', async () => {
