@@ -797,3 +797,142 @@ describe('the role offered after a match (#226)', () => {
     expect(role()).toEqual([SOLDIER]);
   }, 120_000);
 });
+
+describe('a load that never answers (#270)', () => {
+  const STALLED = t('loading.stalled');
+  const RELOAD = t('loading.retry');
+  const PREPARING = t('battle.deploy.loading');
+  const QUICK = t('title.quick');
+  let root: Root;
+  let dom: ReturnType<typeof fakeDom>;
+  let start: number;
+
+  const gate = <T,>() => {
+    let open!: (v: T) => void;
+    const promise = new Promise<T>(r => { open = r; });
+    return { promise, open };
+  };
+  const flush = async () => { for (let i = 0; i < 20; i++) await new Promise(r => setImmediate(r)); };
+  const text = () => dom.container.textContent;
+  const labels = () => buttons(dom.container).map(b => b.textContent);
+
+  async function expectStallAt20s(waiting: string, since: number) {
+    await flush();
+    vi.advanceTimersByTime(since + 20_000 - 1 - Date.now());
+    await flush();
+    expect(text()).toContain(waiting);
+    expect(text()).not.toContain(STALLED);
+    expect(labels()).toEqual([]);
+    vi.advanceTimersByTime(1);
+    await vi.waitFor(() => expect(text()).toContain(STALLED));
+    expect(text()).toContain(waiting);
+    expect(labels()).toEqual([RELOAD]);
+    expect(dom.reload).not.toHaveBeenCalled();
+  }
+
+  async function app(hash: string, opts: { boot?: Promise<unknown>; battle?: () => Promise<Record<string, unknown>> }) {
+    dom = fakeDom(hash);
+    vi.doMock('../../assets/loader', () => ({ assets: { loadGroup: () => opts.boot ?? Promise.resolve() } }));
+    if (opts.battle) vi.doMock('./Battle', opts.battle);
+    const { App } = await import('../../App');
+    root = createRoot(dom.container as unknown as HTMLElement);
+    start = Date.now();
+    root.render(createElement(App));
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    root?.unmount();
+    vi.useRealTimers();
+    vi.doUnmock('../../assets/loader');
+    vi.doUnmock('./Battle');
+    vi.doUnmock('./loadBattle');
+    vi.restoreAllMocks();
+  });
+
+  it('says it in Korean, with the existing reload words', () => {
+    expect(STALLED).toBe('아직 불러오지 못했습니다. 더 기다리거나, 연결을 확인하고 다시 불러오세요.');
+    expect(RELOAD).toBe(t('battle.matchError.retry'));
+  });
+
+  it('offers a reload on the boot screen at 20 s, reloads only on the press, and gets out of the way once the boot assets arrive', async () => {
+    const boot = gate<void>();
+    await app('#/', { boot: boot.promise });
+    await expectStallAt20s(t('loading.text'), start);
+    press(buttons(dom.container)[0]);
+    expect(dom.reload).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(120_000);
+    await flush();
+    expect(dom.reload).toHaveBeenCalledTimes(1);
+    boot.open();
+    await vi.waitFor(() => expect(text()).toContain(QUICK));
+    expect(text()).not.toContain(STALLED);
+  });
+
+  it('offers a reload while the battle screen chunk hangs, and enters once it arrives', async () => {
+    const chunk = gate<Record<string, unknown>>();
+    await app('#/battle', { battle: () => chunk.promise });
+    await vi.waitFor(() => expect(text()).toContain(DEPLOY));
+    press(buttons(dom.container).find(b => b.textContent.includes(DEPLOY))!);
+    const pressed = Date.now();
+    await expectStallAt20s(t('loading.text'), pressed);
+    chunk.open({ Battle: () => createElement('p', null, 'in the battle') });
+    await vi.waitFor(() => expect(text()).toContain('in the battle'));
+    expect(text()).not.toContain(STALLED);
+    expect(dom.reload).not.toHaveBeenCalled();
+  });
+
+  it('offers a reload while the chunk check after a reload hangs, and lands on the setup screen once it answers', async () => {
+    const check = gate<void>();
+    await app('#/battle/harek/quick', { battle: async () => ({ checkBattleLoads: () => check.promise }) });
+    await expectStallAt20s(t('loading.text'), start);
+    check.open();
+    await vi.waitFor(() => expect(text()).toContain(DEPLOY));
+    expect(text()).not.toContain(STALLED);
+    expect(dom.reload).not.toHaveBeenCalled();
+  });
+
+  it('offers a reload while the battle code or map hangs inside the battle screen', async () => {
+    const code = gate<never>();
+    dom = fakeDom('#/battle/harek/quick');
+    vi.doMock('./loadBattle', () => ({ loadBattle: () => code.promise }));
+    const { Battle } = await vi.importActual<typeof import('./Battle')>('./Battle');
+    const props = { choice: { mode: 'quick', map: 'harek', side: 'coalition', time: 'day' }, touch: false, settings: {}, onSettings() {}, onSetup() {}, onTitle() {}, tips: [], onTip() {}, onRole() {} } as unknown as Parameters<typeof Battle>[0];
+    root = createRoot(dom.container as unknown as HTMLElement);
+    const mounted = Date.now();
+    root.render(createElement(BattleLoadBoundary, null, createElement(Suspense, null, createElement(Battle, props))));
+    await expectStallAt20s(PREPARING, mounted);
+    press(buttons(dom.container)[0]);
+    expect(dom.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts the 20 s from the press, not from each wait screen, when the screen chunk is slow and the map then hangs', async () => {
+    const chunk = gate<Record<string, unknown>>();
+    const code = gate<never>();
+    vi.doMock('./loadBattle', () => ({ loadBattle: () => code.promise }));
+    await app('#/battle', { battle: () => chunk.promise });
+    await vi.waitFor(() => expect(text()).toContain(DEPLOY));
+    press(buttons(dom.container).find(b => b.textContent.includes(DEPLOY))!);
+    const pressed = Date.now();
+    await flush();
+    vi.advanceTimersByTime(15_000);
+    chunk.open(await vi.importActual<typeof import('./Battle')>('./Battle'));
+    await vi.waitFor(() => expect(text()).toContain(PREPARING));
+    expect(Date.now() - pressed).toBeLessThan(16_000);
+    await expectStallAt20s(PREPARING, pressed);
+  });
+
+  it('never shows the notice when everything loads', async () => {
+    await app('#/battle/harek/quick', { battle: async () => ({ checkBattleLoads: async () => {} }) });
+    await vi.waitFor(() => expect(text()).toContain(DEPLOY));
+    vi.advanceTimersByTime(60_000);
+    await flush();
+    expect(text()).not.toContain(STALLED);
+    expect(dom.reload).not.toHaveBeenCalled();
+  });
+});
