@@ -856,7 +856,7 @@ describe('a load that never answers (#270)', () => {
   });
 
   it('says it in Korean, with the existing reload words', () => {
-    expect(STALLED).toBe('아직 불러오지 못했습니다. 연결을 확인하고 다시 불러오세요.');
+    expect(STALLED).toBe('아직 불러오지 못했습니다. 더 기다리거나, 연결을 확인하고 다시 불러오세요.');
     expect(RELOAD).toBe(t('battle.matchError.retry'));
   });
 
